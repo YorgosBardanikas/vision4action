@@ -1,1 +1,1 @@
-# V4A-NC
+# Repository including relevant code for the vision4action project.
