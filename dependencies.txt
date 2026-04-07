@@ -1,0 +1,11 @@
+Dependencies
+
+numpy
+scipy
+pandas
+xarray
+scikit-learn
+joblib
+mne 
+
+frites (https://github.com/brainets/frites)
