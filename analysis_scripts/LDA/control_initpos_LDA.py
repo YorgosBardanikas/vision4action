@@ -109,8 +109,9 @@ for train_list, test_list, ext in zip(train_lists, test_lists, exts):
                         coords=[areas, tmins, np.arange(nperms), true_trials])
 
     path = 'path_to_directory/LDA/'
-    filename = f'{subj}-{onset}-{content}_LDA_predictions_test_{ext}.nc'
-    lda_predictions.to_netcdf(os.path.join(path, filename),engine='h5netcdf')
+    variables = [lda_predictions, lda_predictions_shuff]
+    filenames = [f'{subj}-{onset}-{content}_LDA_predictions_test_{ext}.nc',
+                 f'{subj}-{onset}-{content}_LDA_predictions_shuffled_{ext}.nc']
 
-    filename_shuff = f'{subj}-{onset}-{content}_LDA_predictions_shuffled_{ext}.nc'
-    lda_predictions_shuff.to_netcdf(os.path.join(path, filename_shuff),engine='h5netcdf')
+    for variable, filename in zip(variables, filenames):
+        variable.to_netcdf(os.path.join(path, filename),engine='h5netcdf')
