@@ -20,7 +20,7 @@ content = 'mua'
 rgr = 'goal'
 nperms = 192
 session_type = 'short12J' if subj == 'jazz' else 'short12E'
-path = f'{utils.v4a_dir}/LDA/'
+path = 'path_to_directory/LDA/'
 
 epochList,epochListBhv = [],[]
 for targetID in [2,3,4]:
@@ -38,16 +38,12 @@ ch_names = epochs.ch_names
 times = epochs.times
 areas = ['7A','M1']
 
-# regressor 'goal':     train on the first target and test on the second and third targets.
-# regressor 'goal8020': train on the 80% of the first target trials and test on the 20% of
-#                       the rest 20% for cross-validation.
-
 if rgr == 'goal':
+    """Train on the first target and test on the second and third targets."""
 
-    train = [f'Move_{i}' for i in [2,3,4,6]]
-    test = [f'Move_{i}' for i in [11,15,9,16,7,18,8,13]]
+    train = [f'Move_{i}' for i in [2,3,4,6]] # trial codes to identify movements on the train_group
+    test = [f'Move_{i}' for i in [11,15,9,16,7,18,8,13]] # same for test group
     nld = 2
-    lds = [f'Ax{l+1}' for l in range(nld)]
     lda_list, lda_models_perms = [],[]
 
     for area in areas:
@@ -70,13 +66,18 @@ if rgr == 'goal':
         lda_models_perms.append(lda_models_perm)
         
     # Save the results
-    with open(path + f'{subj}-{onset}-{content}_LDA_model_{rgr}.pkl','wb') as handle:
-        pickle.dump(lda_list, handle)
-    with open(path + f'{subj}-{onset}-{content}_LDA_model_{rgr}_shuffled.pkl','wb') as handle:
-        pickle.dump(lda_models_perms, handle)
+    variables = [lda_list, lda_models_perms]
+    filenames = [f'{subj}-{onset}-{content}_LDA_model_{rgr}.pkl',
+                 f'{subj}-{onset}-{content}_LDA_model_{rgr}_shuffled.pkl']
+
+    for variable, filename in zip(variables, filenames):
+        with open(os.path.join(path,filename),'wb') as handle:
+            pickle.dump(variable, handle)
 
 
 elif rgr == 'goal8020':
+    """Train on the 80% of the first target trials and test on the 20% of
+    the rest 20% for cross-validation."""
 
     codes = [f'Move_{i}' for i in [2,3,4,6]]
     predictions, projections = [],[]
@@ -108,3 +109,5 @@ elif rgr == 'goal8020':
                             coords=[areas, true_trials, times])
     filename = f'{subj}-{onset}-{content}_LDA_predictions_{rgr}.nc'
     lda_predictions.to_netcdf(os.path.join(path, filename),engine='h5netcdf')
+
+else: raise ValueError('Wrong regressor "rgr".')

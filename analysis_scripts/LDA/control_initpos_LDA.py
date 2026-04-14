@@ -17,7 +17,6 @@ onset = 'hand'
 content = 'mua'
 nperms = 192
 session_type = 'short12J' if subj == 'jazz' else 'short12E'
-path = f'{utils.v4a_dir}/LDA/'
 
 epochList,epochListBhv = [],[]
 for targetID in [2,3,4]:
@@ -109,6 +108,7 @@ for train_list, test_list, ext in zip(train_lists, test_lists, exts):
                         dims=['areas','timebins','perms','trials'],
                         coords=[areas, tmins, np.arange(nperms), true_trials])
 
+    path = 'path_to_directory/LDA/'
     filename = f'{subj}-{onset}-{content}_LDA_predictions_test_{ext}.nc'
     lda_predictions.to_netcdf(os.path.join(path, filename),engine='h5netcdf')
 
