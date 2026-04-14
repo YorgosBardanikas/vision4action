@@ -82,7 +82,7 @@ if __name__ == '__main__':
         codes_ = epochs_group.events[:, 2]
         new_codes = np.array([mapping.get(code, 0) for code in codes_])
 
-        # Channels/times selection and downsampling for computational efficiency
+        # Channels selection and downsampling for computational efficiency
         epochs_ = epochs_group.copy().get_data(picks=roi)
         epochs_ = savgol_filter(epochs_,11,2)
         inputEpochs = epochs_[..., ::decim_factor]
@@ -91,12 +91,13 @@ if __name__ == '__main__':
         fit_group.append(fit_)
         fit_perms_group.append(fit_p)
 
-    # Save the data
-    path = f'{utils.v4a_dir}/FIT/'
     fit = xr.concat(fit_group, dim='groups')
+    fit_perms = xr.concat(fit_perms_group, dim='groups')
+
+    # Save the data
+    path = 'path_to_directory/FIT/'
     fit_filename = f'{subj}-{onset}-{content}-FIT.nc'
     fit.to_netcdf(os.path.join(path, fit_filename),engine='h5netcdf')
-
-    fit_perms = xr.concat(fit_perms_group, dim='groups')
-    perms_filename = f'{subj}-{onset}-{content}-FIT_perms'
+    # save permutations in ndarrays to avoid duplicating metadata in the fit xarray.DataArray
+    perms_filename = f'{subj}-{onset}-{content}-FIT_perms.npy'
     np.save(os.path.join(path, perms_filename), fit_perms.data)

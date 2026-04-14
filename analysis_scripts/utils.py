@@ -26,36 +26,13 @@ def load_session_group(session_type):
             The group with all pre-selected sessions.
     """
 
-    if session_type == 'short':
-        session_group = ['y180911-land-002','y180911-land-003','y180913-land-001',
-                        'y180914-land-001','y180914-land-003',
-                        'y180924-land-001','y180924-land-002','y180924-land-003',
-                        'y180925-land-001','y180925-land-002','y180925-land-003']
-    elif session_type == 'long':    
-        session_group = ['y181015-land-002','y181015-land-003','y181015-land-004',
-                        'y181016-land-001','y181016-land-002','y181016-land-003',
-                        'y181018-land-001','y181018-land-002','y181018-land-003',
-                        'y181019-land-001','y181019-land-002','y181019-land-003',
-                        'y181019-land-004','y181030-land-001','y181102-land-001']
-    elif session_type == 'short12':
-        session_group = ['y180118-land-001','y180122-land-001',
-                        'y180124-land-001','y180125-land-001','y180219-land-001',
-                        'y180219-land-002','y180219-land-003','y180219-land-004',
-                        'y180220-land-001','y180220-land-002','y180221-land-002', 
-                        'y180222-land-001', 'y180222-land-002'] 
-    elif session_type == 'short12E':  
+    if session_type == 'short12E':  
         session_group = ['y190829-land-001','y190902-land-001','y190903-land-001', 
                         'y190903-land-002','y190905-land-001','y190906-land-001', 
                         'y190906-land-002','y190909-land-001','y190909-land-002',
                         'y190909-land-003','y190911-land-001','y190911-land-002', 
                         'y190913-land-001','y190913-land-002']
 
-    elif session_type == 'shortJ': 
-        session_group = ['j210615-land-002','j210616-land-002',
-                        'j210617-land-001','j210618-land-001',
-                        'j210618-land-002','j210618-land-003',
-                        'j210625-land-002','j210625-land-003','j210628-land-001',
-                        'j210628-land-002','j210628-land-003','j210629-land-001']  
     elif session_type == 'short12J':
         session_group = ['j210204-land-001','j210204-land-002',
                         'j210208-land-001','j210211-land-001',
@@ -257,6 +234,7 @@ def group_events (trials, regressor):
             else: group.append(0)  
         group_dict = {'ANY':0}
         group_dict.update({f'Move_{i}':i for i in range(1,19)})
+    else: raise ValueError('Regressor must be motor.')
 
     return np.array(group), group_dict
 

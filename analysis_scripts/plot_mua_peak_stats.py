@@ -55,6 +55,7 @@ if __name__ == '__main__':
     areas = ['M1','7A']
     clrs = ['teal','darkviolet','goldenrod']
     t11, t22 = 500, 1100  # -200, 400 around target onset
+    
     plt.rcParams.update({'font.size': 14})
     f1,ax1 = plt.subplots(1,2,sharey=True,figsize=(8,4))
     f2,ax2 = plt.subplots(1,2,sharey=True,figsize=(8,4))

@@ -57,10 +57,8 @@ for a,area in enumerate(areas):
     # Plot all single-trials
     subs_ = subs[a]
     plt.subplot(2,2,subs_[0])
-    if subj == 'jazz' and area == '7A': v = 0.4
-    else: v = 0.6
     plt.pcolormesh(times[t1:t2],np.arange(3*ntr),epochs_ch,
-                   cmap=utils.parula(),vmin=-0.1,vmax=v)
+                   cmap=utils.parula(),vmin=-0.1,vmax=0.6)
     plt.axvline(0,color='k',linestyle='--',lw=3)
     plt.hlines([ntr-0.5, 2*ntr-0.5],times[t1],times[t2],color='w',linestyle='--',lw=4)
     plt.xlim([times[t1],times[t2]])

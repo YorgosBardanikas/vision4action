@@ -3,7 +3,6 @@ WfStats workflow is used from
 https://github.com/brainets/frites/tree/master/frites/workflow"""
 
 import os
-import utils
 import xarray as xr
 import numpy as np
 from frites.workflow import WfStats
@@ -13,7 +12,7 @@ from scipy.signal import savgol_filter
 subj = 'jazz'
 onset = 'targ'
 content = 'mua'
-path = f'{utils.v4a_dir}/FIT/'
+path = '/path_to_directory/FIT/'
 fit_filename = f'{subj}-{onset}-{content}-FIT.nc'
 fit = xr.open_dataarray(os.path.join(path, fit_filename),engine='h5netcdf')
 roi = fit.roi.data.tolist()
