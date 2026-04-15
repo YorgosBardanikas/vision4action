@@ -7,5 +7,6 @@ xarray
 scikit-learn
 joblib
 mne 
+neo
 
 frites (https://github.com/brainets/frites)
