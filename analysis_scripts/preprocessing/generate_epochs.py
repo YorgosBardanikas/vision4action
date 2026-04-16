@@ -31,7 +31,7 @@ def _parse_trials(segBehavior, targetID):
     Extract trial timing, target IDs, and landing-sequence event codes.
     Returns a dict with all trial-level arrays needed.
     """
-    trials   = segBehavior.filter(name='All Trial Type Presentations')[0]
+    trials = segBehavior.filter(name='All Trial Type Presentations')[0]
     attempts = segBehavior.filter(name='All Trials')[0]
 
     # Get the indices of trials sorted based on their landing sequence
@@ -63,7 +63,7 @@ def _parse_trials(segBehavior, targetID):
     tg_repeated = np.zeros(ntrials, dtype=bool)
 
     for trial, (t1, t2) in enumerate(zip(tStart_ind, tEnd_ind)):
-        trial_times  = event_times[t1:t2+1]
+        trial_times = event_times[t1:t2+1]
         trial_labels = event_labels[t1:t2+1]
         indON = np.where(trial_labels == f'target_0{targetID}_on')[0]
         indR = np.where(trial_labels == f'target_0{targetID}_reached')[0]
@@ -71,7 +71,7 @@ def _parse_trials(segBehavior, targetID):
             return None
 
         # Select the last events (that always come from the successful trial)
-        target_onsets[trial]  = trial_times[indON[-1]]
+        target_onsets[trial] = trial_times[indON[-1]]
         target_reached[trial] = trial_times[indR[-1]]
 
         # In case of multiple attempts, target 2 will be anticipated in the 
@@ -90,16 +90,16 @@ def _parse_trials(segBehavior, targetID):
     event_ids = {f'LS {i+1} Target {targetID}': int(f'{i+1}{targetID}')
                 for i in range(n_ls)}
 
-    return dict(ntrials          = ntrials,
-                target_onsets    = target_onsets,
-                target_reached   = target_reached,
-                lstg             = lstg,
-                tg_repeated      = tg_repeated,
-                attempts_intrials= attempts_intrials,
-                currentTargetID  = currentTargetID,
+    return dict(ntrials = ntrials,
+                target_onsets = target_onsets,
+                target_reached = target_reached,
+                lstg = lstg,
+                tg_repeated = tg_repeated,
+                attempts_intrials = attempts_intrials,
+                currentTargetID = currentTargetID,
                 previousTargetID = previousTargetID,
-                event_ids        = event_ids,
-                n_ls             = n_ls)
+                event_ids = event_ids,
+                n_ls = n_ls)
 
 
 def _get_hand_onsets(target_onsets, target_reached, segBehavior):
@@ -144,7 +144,7 @@ def _build_mne_events(event_onsets, lstg):
     return np.column_stack((event_onsets, events_zero, lstg))
 
 
-def _zscore_signal(signal, axis): #axis=1
+def _zscore_signal(signal, axis):
     """Z-score each channel (row) across all timepoints."""
     mean = signal.mean(axis, keepdims=True)
     std  = signal.std(axis,  keepdims=True)
@@ -265,7 +265,8 @@ def _create_bhv_epochs(anasig_behav, hand_x, hand_y, eye_x, eye_y,
 def _create_neural_epochs(analogSignal, content, event_onsets, trial_data,
                           w1, w2, t0_, v4a_dir, session_name,
                           onset, targetID, save=True):
-    """Z-score, epoch, and save neural signal (mua or bnrmua)."""
+    """Cut the neural signal in epochs, normalize and save.
+    If save=False, return the signal epochs for downstream use."""
 
     if content == 'bnrmua':
         # Convolve with a Gaussian kernel (size: 2*sigma*truncate, 40ms)
@@ -302,7 +303,7 @@ def _create_neural_epochs(analogSignal, content, event_onsets, trial_data,
 
 
 def _create_tfr_epochs(signalEpochs, session_name, onset, targetID, v4a_dir):
-    """Compute Morlet TFR, z-score, and save."""
+    """Compute Morlet TFR and save."""
     n_freqs = 30
     freqs = np.linspace(1, 150, n_freqs)
     n_cycles = freqs/6
@@ -318,7 +319,7 @@ def _create_tfr_epochs(signalEpochs, session_name, onset, targetID, v4a_dir):
 
 def _create_power_epochs(signalEpochs, content, session_name,
                           onset, targetID, t0, k, v4a_dir):
-    """Compute multitaper LFP power (beta or hga), z-score, and save."""
+    """Compute multitaper LFP power (beta or hga) and save."""
 
     power_params = {'beta': dict(ncycl=5, tb=3.5, freq=25),
                     'hga' : dict(ncycl=10, tb=4, freq=75)}
@@ -352,8 +353,8 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
     # Parameters
     k = 80 # samples to discard at edges to avoid multitaper artifacts 
     w1, w2 = preproc_funcs.windows(onset, k=k)
-    t0 = -round((w1-k)/1000, 2)
-    t0_ = -round(w1/1000, 2)
+    t0 = -round((w1-k)/1000, 2) # for bhv
+    t0_ = -round(w1/1000, 2) # for mua, tfr, lfp
 
     # Utility function
     def _pick(label):
@@ -415,7 +416,7 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
             w1, w2, t0_, v4a_dir, session_name, onset, targetID, save=False)
         
         _create_power_epochs(signalEpochs, content, trial_data, session_name,
-                              onset, targetID, t0, k, v4a_dir)
+                              onset, targetID, t0_, k, v4a_dir)
 
     else:
         raise ValueError(f"Unknown content type '{content}'.")
