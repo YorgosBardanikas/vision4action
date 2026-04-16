@@ -110,4 +110,5 @@ elif rgr == 'goal8020':
     filename = f'{subj}-{onset}-{content}_LDA_predictions_{rgr}.nc'
     lda_predictions.to_netcdf(os.path.join(path, filename),engine='h5netcdf')
 
-else: raise ValueError('Wrong regressor "rgr".')
+else: 
+    raise ValueError(f'Unknown regressor {rgr}.')
