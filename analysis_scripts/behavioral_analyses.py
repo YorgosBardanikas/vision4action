@@ -2,13 +2,18 @@
 and plots the figures 2B, 2C, 2D.
 """
 
+import os
 import utils
 import mne
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
-from scipy.stats import ttest_1samp
+from scipy.stats import ttest_1samp, ttest_rel, wilcoxon
 from frites.stats.stats_nonparam import confidence_interval
+
+### ------ Time windows ------
+T1, T2   = 320, 1220  # -300 ms to +600 ms around target onset
+HT1, HT2 = 620, 820   # 0 to 200 ms after movement onset
 
 
 ### ------ Helper functions ------
@@ -32,6 +37,15 @@ def get_target_xy(epochs, targXY):
     return target_xy
 
 
+def adjacent_values(vals, q1, q3):
+    """Return adjacent values for violin plots."""
+    upper_adjacent_value = q3 + (q3 - q1) * 1.5
+    upper_adjacent_value = np.clip(upper_adjacent_value, q3, vals[-1])
+
+    lower_adjacent_value = q1 - (q3 - q1) * 1.5
+    lower_adjacent_value = np.clip(lower_adjacent_value, vals[0], q1)
+    return lower_adjacent_value, upper_adjacent_value
+
 
 ### ------ Computing functions ------
 
@@ -41,9 +55,7 @@ def compute_initial_deviation(epochs, targXY):
     Requires onset == 'hand'.
     Returns initial_deviation (ntrials,) in radians.
     """
-    HT1, HT2 = 620, 820 # first 200 ms after movement onset
 
-    epochs = utils.keep_1attempt_trials(epochs, None)
     hand_xy = load_hand_xy(epochs)
     # average x,y position across the time window
     hand_avg = hand_xy[..., HT1:HT2].mean(axis=-1)
@@ -62,14 +74,12 @@ def compute_directional_alignment(epochs, targXY):
     Requires onset == 'targ'.
     Returns directional_alignment (ntrials, ntimes-1), target_rank.
     """
-    HT1, HT2 = 320, 1220 # -300 ms to +600 ms around target onset
-
-    epochs = utils.keep_1attempt_trials(epochs, None)
+    
     target_rank = epochs.metadata['Target Rank'].to_numpy()
 
     # Load the hand positions for each single trial
     hand_xy = load_hand_xy(epochs)
-    hand_xy = hand_xy[..., HT1:HT2]
+    hand_xy = hand_xy[..., T1:T2]
     ntimes = hand_xy.shape[-1]
 
     # Get the x,y positions of the visual targets in the workspace
@@ -84,13 +94,16 @@ def compute_directional_alignment(epochs, targXY):
     hand_drct = np.diff(hand_xy, axis=-1)
     hand_drct = savgol_filter(hand_drct, 101, 3)
 
+    # Delete last time point to align hand_targ_vec with hand_drct (due to np.diff)
+    hand_targ_vec = hand_targ_vec[...,:-1]
+
     # Find the magnitude of the vectors
     n1 = np.linalg.norm(hand_targ_vec, axis=1, keepdims=True)
     n2 = np.linalg.norm(hand_drct, axis=1, keepdims=True)
 
     # Compute the cosine similarity (dot product) between the two vectors
     directional_alignment = np.einsum('ijk,ijk->ik', 
-                                    hand_targ_vec[...,:-1] / n1, 
+                                    hand_targ_vec / n1,
                                     hand_drct / n2)
     
     return directional_alignment, target_rank
@@ -101,6 +114,7 @@ def _compute_null(targXY):
     Compute the geometric null cosine similarity for peripheral targets
     in the hexagonal workspace (weighted mean over square and corner targets).
     """
+
     # Null for movements starting from a square target
     t_centered = targXY - targXY[:,[5]]
     a, b = t_centered[:,6], t_centered[:,1]
@@ -122,7 +136,7 @@ def compute_eye_kinematics(epochs, subj):
     Filter saturated trials and return smoothed eye velocity per target rank.
     Returns dict {target_rank: (ntrials, ntimes)} and epochs.times.
     """
-    epochs = utils.keep_1attempt_trials(epochs, None)
+
     target_rank = epochs.metadata['Target Rank'].to_numpy()
     times = epochs.times
     eye_vel = epochs.get_data(picks=['Eye Velocity']).squeeze()
@@ -178,8 +192,7 @@ def plot_directional_alignment(epochs, targXY):
 
     assert onset == 'targ', "plot_directional_alignment requires onset='targ'."
 
-    HT1, HT2 = 320, 1220 # -300 ms to +600 ms around target onset
-    times = np.arange(HT1-619, HT2-620) # time labels for passing the xticks
+    times = np.arange(T1-619, T2-620) # time labels for passing the xticks
     null = _compute_null(targXY)
     null_per_target = {2:0, 3:null, 4:null}
     colors = {2:'teal', 3:'darkviolet', 4:'goldenrod'}
@@ -213,7 +226,6 @@ def plot_eye_kinematics(epochs, subj):
     
     assert onset == 'targ', "plot_directional_alignment requires onset='targ'."
 
-    T1, T2 = 320, 1220 # -300 ms to +600 ms around target onset
     colors = {2: 'teal', 3: 'darkviolet', 4: 'goldenrod'}
     y = [0.02, 0.05, 0.08] if subj == 'jazz' else [0.05, 0.1, 0.15]
     eye_vel, times = compute_eye_kinematics(epochs, subj)
@@ -235,20 +247,72 @@ def plot_eye_kinematics(epochs, subj):
     return fig, ax
 
 
+def plot_distributions_across_targets(epochs):
+    """Plot the distributions of a behavioral variable across targets.
+    Examples: reaction times, movement durations etc."""
+
+    # Unpack behavioral data
+    target_rank = epochs.metadata['Target Rank'].to_numpy()
+    reaction_times = epochs.metadata['Hand Reaction Times'].to_numpy()
+    segment_duration = epochs.metadata['Segment Duration'].to_numpy()
+    movement_duration = segment_duration - reaction_times
+
+    def _plot_and_stats(beh):
+
+        data = [beh[target_rank == tg] for tg in [2,3,4]]
+
+        fig = plt.figure()
+        ax = plt.gca()
+        parts = ax.violinplot(data, showmedians=False ,showextrema=False)
+
+        quartile1, medians, quartile3 = np.percentile(data, [25, 50, 75], axis=1)
+        whiskers = np.array([adjacent_values(sorted_array, q1, q3) 
+                            for sorted_array, q1, q3 in zip(data, quartile1, quartile3)])
+        whiskers_min, whiskers_max = whiskers[:,0], whiskers[:,1]
+        inds = np.arange(1, len(medians) + 1)
+        ax.scatter(inds, medians, marker='o', color='w', s=20, zorder=3)
+        plt.vlines(inds, quartile1, quartile3, color='k', linestyle='-', lw=5)
+        plt.vlines(inds, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
+
+        colors = ['teal','darkviolet','goldenrod']
+        for i,p in enumerate(parts['bodies']):
+            p.set_facecolor(colors[i])
+        ax.set_xticks([])
+        ax.spines[['right','bottom','top']].set_visible(False)
+
+        # Statistics with bonferroni correction for 3 comparisons
+        t1,p1 = wilcoxon(data[0],data[1])
+        t2,p2 = wilcoxon(data[1],data[2])
+        t3,p3 = wilcoxon(data[0],data[2])
+        p1,p2,p3 = p1*3,p2*3,p3*3
+        print(f't01:{t1} p01:{p1}')
+        print(f't12:{t2} p12:{p2}')
+        print(f't02:{t3} p02:{p3}')
+
+        return fig, ax
+    
+    print('   Reaction Times')
+    _plot_and_stats(reaction_times)
+    print('   Movement Durations')
+    _plot_and_stats(movement_duration)
+
+
 
 if __name__ == '__main__':
 
-    subj  = 'jazz'
+    subj  = 'enya'
     onset = 'targ'
     session_type = 'short12J' if subj == 'jazz' else 'short12E'
 
     # Load epochs of behavior
     epochList = [utils.load_epochs(session_type, onset, targetID, content='bhv')
-                 for targetID in [2, 3, 4]]
+                 for targetID in [2,3,4]]
     epochs = mne.concatenate_epochs(epochList, on_mismatch='ignore')
+    epochs = utils.keep_1attempt_trials(epochs, None)
 
     # Load target positions
-    targXY = np.load(f'path_to_directory/targets_xy_positions_{subj}.npy')
+    targ_file = f'targets_xy_positions_{subj}.npy'
+    targXY = np.load(os.path.join(utils.PATH, targ_file))
 
     # Plot Figure 2B
     plot_initial_deviation(epochs, targXY)
@@ -256,5 +320,7 @@ if __name__ == '__main__':
     plot_directional_alignment(epochs, targXY)
     # Plot Figure 2D
     plot_eye_kinematics(epochs, subj)
+    # Plot Figure 2X
+    plot_distributions_across_targets(epochs)
     
     plt.show()
