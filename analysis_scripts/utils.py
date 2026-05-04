@@ -2,11 +2,22 @@
 Collection of utility functions that are used in the V4A analysis scripts.
 """
 
+import os
 import mne
 import numpy as np
 from frites.io import logger
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from matplotlib.colors import LinearSegmentedColormap
+
+
+# ---------------------------------
+CWD = os.getcwd()
+if 'INT' in CWD:
+    S = '/envau/work/comco/bardanikas.g' 
+elif 'scratch' in CWD:
+    S = '/scratch/gbardanikas'
+PATH = S + '/Vision4Action/V4A_data'
+# ---------------------------------
 
 
 def load_session_group(session_type):
@@ -44,7 +55,7 @@ def load_session_group(session_type):
 
 
 
-def concatenate_sessions (session_group, n_sessions, onset, targetID, epoch_content='hga'):
+def concatenate_sessions (session_group, n_sessions, onset, targetID, epoch_content='mua'):
     """
     Concatenate the epochs of high gamma or velocity for the selected sessions.
 
@@ -62,7 +73,7 @@ def concatenate_sessions (session_group, n_sessions, onset, targetID, epoch_cont
     targetID : int
             The number ID of the target. Can be 2, 3 or 4.                 
     epoch_content : str 
-                Epoch content. Can either be 'hga' (default) or 'bhv'.            
+                Epoch content. Can either be 'mua' (default) or 'bhv'.            
 
     Returns
     ----------                
@@ -86,17 +97,16 @@ def concatenate_sessions (session_group, n_sessions, onset, targetID, epoch_cont
     else: raise ValueError('n_sessions must be an integer or the string "group"')
 
     # Load the epochs objects (mne.Epochs) and append them in a list for concatenation
-    v4a_dir = 'path_to_directory'
     epochs_list = []
     for session_name in session_names:
-        data_dir = f'{v4a_dir}/{session_name}'
+        data_dir = f'{PATH}/{session_name}'
         epoch_file = f'{session_name}_{epoch_content}_{onset}{targetID}-epo.fif'
         try:
-            mne.read_epochs(f'{data_dir}/{epoch_file}',verbose='error')
+            mne.read_epochs(os.path.join(data_dir, epoch_file), verbose='error')
         except FileNotFoundError:
             print(f'File {epoch_file} was not found.')
             continue
-        else: epoch = mne.read_epochs(f'{data_dir}/{epoch_file}',verbose='error')
+        else: epoch = mne.read_epochs(os.path.join(data_dir, epoch_file), verbose='error')
         epochs_list.append(epoch)   
 
     # Create a dictionary with all session names and epochs
