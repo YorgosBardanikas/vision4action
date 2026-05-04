@@ -26,6 +26,15 @@ SFREQ = 1000 # Hz
 # -------------------------- Helper functions ---------------------------
 # -----------------------------------------------------------------------
 
+def _load_mua_pkl(v4a_dir, filename):
+    """Load the mua pickle file."""
+    logger.info(f"Loading the MUA data file {filename}...")
+    with open(os.path.join(v4a_dir, filename),'rb') as handle:
+        analogSignal = pickle.load(handle)
+    logger.info("...done.")
+    return analogSignal
+
+
 def _parse_trials(segBehavior, targetID):
     """
     Extract trial timing, target IDs, and landing-sequence event codes.
@@ -431,7 +440,7 @@ if __name__ == '__main__':
 
         for session in session_group:
 
-            v4a_dir = f'/path_to_directory/{session}'
+            v4a_dir = f'{utils.PATH}/{session}'
 
             # Get the Neo.Segments from the .nix file
             nix_filename = f'{session}_small.nix'   
@@ -448,18 +457,12 @@ if __name__ == '__main__':
             if epoch_content == 'bnrmua':
                 # Get the MUA from the .pkl file
                 mua_filename = f'{session}_MUA.pkl'
-                logger.info(f"Loading the MUA data file {mua_filename}...")
-                with open(os.path.join(v4a_dir, mua_filename),'rb') as handle:
-                    analogSignal = pickle.load(handle)
-                logger.info("...done.")
+                analogSignal = _load_mua_pkl(v4a_dir, mua_filename)
 
             elif epoch_content == 'mua':
                 # Get the MUAe from the .pkl file
                 muae_filename = f'{session}_MUAe.pkl'
-                logger.info(f"Loading the MUAe data file {muae_filename}...")
-                with open(os.path.join(v4a_dir, muae_filename),'rb') as handle:
-                    analogSignal = pickle.load(handle)
-                logger.info("...done.")
+                analogSignal = _load_mua_pkl(v4a_dir, muae_filename)
 
             elif epoch_content in ['beta','hga','tfr']: 
                 # Unpack the LFP data from the segments
