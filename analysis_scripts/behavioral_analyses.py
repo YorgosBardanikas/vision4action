@@ -133,33 +133,40 @@ def _compute_null(targXY):
 
 def compute_kinematics(epochs, subj, effector):
     """
-    Filter saturated trials and return smoothed eye velocity per target rank.
+    Compute smooth velocity of the hand or the eye (effector) per target rank.
+    In case of 'Eye', discard trials where eye velocity saturated.
     Returns dict {target_rank: (ntrials, ntimes)}, epochs.times and the mask
     of valid trial indices after discarding saturated trials.
     """
-
+    tgs = [2,3,4]
+    ntg = len(tgs)
+    ntrials_per_tg = len(epochs)//ntg
     target_rank = epochs.metadata['Target Rank'].to_numpy()
+    w_filt = 11 if effector == 'Eye' else 101
     times = epochs.times
-    eye_vel = epochs.get_data(picks=[f'{effector} Velocity']).squeeze()
-    eye_vel_filt = savgol_filter(eye_vel, 201, 2)
+    vel = epochs.get_data(picks=[f'{effector} Velocity']).squeeze()
+    vel_filt = savgol_filter(vel, w_filt, 2)
 
-    # Discard full trials if the eye velocity is saturated even in only
-    # one of the 2nd, 3rd or 4th targets.
-    sat_thres = 100 if subj == 'jazz' else 200
-    mask = np.zeros((3,len(epochs)//3), dtype=bool)
+    if effector == 'Eye':
+        # Discard full trials if the (eye) velocity is saturated even in only
+        # one of the 2nd, 3rd or 4th targets.
+        sat_thres = 100 if subj == 'jazz' else 200
+        mask = np.zeros((ntg,ntrials_per_tg), dtype=bool)
 
-    for i,tg in enumerate([2,3,4]):
-        # sum the eye velocity across time
-        sums = eye_vel_filt[target_rank==tg].sum(-1)
-        # keep only the indexes that are smalled than a saturation threshold
-        mask[i] = sums < sat_thres
-    # Keep trial indexes only if they are valid in all three targets
-    valid_trials = np.where(mask[0] & mask[1] & mask[2])[0]
+        for i,tg in enumerate(tgs):
+            # sum the velocity across time
+            sums = vel_filt[target_rank==tg].sum(-1)
+            # keep only the indexes that are smalled than a saturation threshold
+            mask[i] = sums < sat_thres
+        # Keep trial indexes only if they are valid in all three targets
+        valid_trials = np.where(mask[0] & mask[1] & mask[2])[0]
+    
+    elif effector == 'Hand':
+        # Select all trials, no saturation problems
+        valid_trials = np.arange(ntrials_per_tg)
 
-    eye_vel_tg = {tg: eye_vel_filt[target_rank==tg][valid_trials] 
-                  for tg in [2,3,4]}
-    return eye_vel_tg, times, valid_trials
-
+    vel_tg = {tg: vel_filt[target_rank==tg][valid_trials] for tg in [2,3,4]}
+    return vel_tg, times, valid_trials
 
 
 ### ------ Plotting functions ------
@@ -219,18 +226,18 @@ def plot_directional_alignment(epochs, targXY):
 
 
 def plot_kinematics(epochs, subj, effector):
-    """Plot trial-averaged eye velocity traces (Figure 2D)."""
+    """Plot trial-averaged hand/eye velocity traces."""
 
     colors = {2: 'teal', 3: 'darkviolet', 4: 'goldenrod'}
     y = [0.02, 0.05, 0.08] if subj == 'jazz' else [0.05, 0.1, 0.15]
-    eye_vel, times, _ = compute_kinematics(epochs, subj, effector)
+    vel, times, _ = compute_kinematics(epochs, subj, effector)
 
     # Average eye velocity
     fig = plt.figure()
     ax = plt.gca()
     for tg in [2,3,4]:
-        avg  = eye_vel[tg].mean(axis=0)
-        conf = confidence_interval(eye_vel[tg], axis=0, cis=95).squeeze()
+        avg  = vel[tg].mean(axis=0)
+        conf = confidence_interval(vel[tg], axis=0, cis=95).squeeze()
         ax.plot(times[T1:T2], avg[T1:T2], color=colors[tg], linewidth=3)
         ax.fill_between(times[T1:T2], conf[0, T1:T2], conf[1, T1:T2],
                             color=colors[tg], alpha=0.3)
@@ -253,7 +260,11 @@ def plot_distributions_across_targets(epochs, subj, effector):
     segment_duration = epochs.metadata['Segment Duration'].to_numpy()
     hand_eye_delay = epochs.metadata['Hand-Eye Delay'].to_numpy()
     movement_duration = segment_duration - hand_reaction_times
-    _,_,valid = compute_kinematics(epochs, subj, effector)
+
+    if effector == 'Eye':
+        # Get the indices of the valid eye trials
+        _,_,valid = compute_kinematics(epochs, subj, effector)
+    else: valid = None # all trials are valid for hand movements
 
     def _plot_and_stats(beh, valid=None):
         """Plot the distributions and print the statistics."""
@@ -270,11 +281,10 @@ def plot_distributions_across_targets(epochs, subj, effector):
         quartile1, medians, quartile3 = np.percentile(data, [25, 50, 75], axis=1)
         whiskers = np.array([adjacent_values(sorted_array, q1, q3) 
                             for sorted_array, q1, q3 in zip(data, quartile1, quartile3)])
-        whiskers_min, whiskers_max = whiskers[:,0], whiskers[:,1]
         inds = np.arange(1, len(medians) + 1)
         ax.scatter(inds, medians, marker='o', color='w', s=20, zorder=3)
         plt.vlines(inds, quartile1, quartile3, color='k', linestyle='-', lw=5)
-        # plt.vlines(inds, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
+        # plt.vlines(inds, whiskers[:,0], whiskers[:,1], color='k', linestyle='-', lw=1)
 
         colors = ['teal','darkviolet','goldenrod']
         for i,p in enumerate(parts['bodies']):
@@ -296,9 +306,9 @@ def plot_distributions_across_targets(epochs, subj, effector):
     print('   Hand Reaction Times')
     _plot_and_stats(hand_reaction_times)
     print('   Eye Reaction Times')
-    _plot_and_stats(eye_reaction_times, valid=valid)
+    # _plot_and_stats(eye_reaction_times, valid=valid)
     print('   Movement Durations')
-    _plot_and_stats(movement_duration)
+    # _plot_and_stats(movement_duration)
     print('   Hand Eye Delay')
     _plot_and_stats(hand_eye_delay, valid=valid)
 
@@ -307,7 +317,7 @@ def plot_distributions_across_targets(epochs, subj, effector):
 if __name__ == '__main__':
 
     subj  = 'jazz'
-    onset = 'newhand'
+    onset = 'targ' # 'targ','eye' or 'hand'
     effector = 'Eye' # 'Eye' or 'Hand'
     session_type = 'short12J' if subj == 'jazz' else 'short12E'
 
