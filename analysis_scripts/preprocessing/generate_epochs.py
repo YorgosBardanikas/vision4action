@@ -132,17 +132,18 @@ def _get_eye_onsets(eye_x, eye_y, target_onsets, target_reached):
     """Detect saccade onset per trial from peak eye velocity."""
     ntrials = target_onsets.shape[0]
     eye_onsets = np.zeros(ntrials, dtype=int)
+    buffer = 200  # ms to search before target onset
 
     for tr, (t_on, t_r) in enumerate(zip(target_onsets, target_reached)):
-        x = eye_x[t_on:t_r+1]
-        y = eye_y[t_on:t_r+1]
+        x = eye_x[t_on-buffer : t_r+1]
+        y = eye_y[t_on-buffer : t_r+1]
         v_ = np.sqrt(np.diff(x)**2 + np.diff(y)**2)
-        v = savgol_filter(v_, 130, 5)
+        v = savgol_filter(v_, 150, 2)
 
         peak = np.argmax(v)
         while v[peak-5:peak].sum() > v[peak-10:peak-5].sum():
             peak -= 1
-        eye_onsets[tr] = t_on + peak
+        eye_onsets[tr] = t_on - buffer + peak
 
     return eye_onsets
 
@@ -482,6 +483,6 @@ if __name__ == '__main__':
             segBehavior = segments['visual']
 
             for targetID in [2,3,4]: # target 1 corresponds to initial central target of trial initiation
-                for onset in ['targ','hand']:
+                for onset in ['eye']:
                     generate_epoch_files(analogSignal, segBehavior, block, session, 
                                             onset, epoch_content, targetID, v4a_dir)
