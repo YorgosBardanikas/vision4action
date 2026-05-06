@@ -133,11 +133,11 @@ def _detect_saccade_onsets(eye_x, eye_y, target_onsets, target_reached, v_thres)
     ntrials = target_onsets.shape[0]
     saccade_onsets = np.zeros(ntrials, dtype=int)
     buffer = 200  # dwelling time (in ms) before initiating a hand movement
-    dt = 25       # typical durations of saccade onset to peak (in ms)
+    dt = 25 # typical durations of saccade onset to peak (in ms)
 
     for tr, (t_on, t_r) in enumerate(zip(target_onsets, target_reached)):
 
-        w_start = t_on - buffer
+        w_start = t_on - buffer # to allow anticipatory saccades before target onset
         w_end = t_r + 1
         x = eye_x[w_start : w_end]
         y = eye_y[w_start : w_end]
