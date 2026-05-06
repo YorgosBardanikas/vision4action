@@ -128,24 +128,57 @@ def _get_hand_onsets(target_onsets, target_reached, segBehavior):
     return allMovOnsets[indices]
 
 
-def _get_eye_onsets(eye_x, eye_y, target_onsets, target_reached):
+def _detect_saccade_onsets(eye_x, eye_y, target_onsets, target_reached, v_thres):
     """Detect saccade onset per trial from peak eye velocity."""
     ntrials = target_onsets.shape[0]
-    eye_onsets = np.zeros(ntrials, dtype=int)
-    buffer = 200  # ms to search before target onset
+    saccade_onsets = np.zeros(ntrials, dtype=int)
+    buffer = 200  # dwelling time (in ms) before initiating a hand movement
+    dt = 25       # typical durations of saccade onset to peak (in ms)
 
     for tr, (t_on, t_r) in enumerate(zip(target_onsets, target_reached)):
-        x = eye_x[t_on-buffer : t_r+1]
-        y = eye_y[t_on-buffer : t_r+1]
-        v_ = np.sqrt(np.diff(x)**2 + np.diff(y)**2)
-        v = savgol_filter(v_, 150, 2)
 
-        peak = np.argmax(v)
-        while v[peak-5:peak].sum() > v[peak-10:peak-5].sum():
-            peak -= 1
-        eye_onsets[tr] = t_on - buffer + peak
+        w_start = t_on - buffer
+        w_end = t_r + 1
+        x = eye_x[w_start : w_end]
+        y = eye_y[w_start : w_end]
+        vx = savgol_filter(np.diff(x), 11, 2) * SFREQ
+        vy = savgol_filter(np.diff(y), 11, 2) * SFREQ
 
-    return eye_onsets
+        v = np.sqrt(vx**2 + vy**2)
+        v_binary = (v > v_thres).astype(int)
+        thres_crossings = np.where(np.diff(v_binary) == 1)[0]
+        peak_idx = np.argmax(v)
+
+        # If there are no threshold crossings, assign as saccade onset
+        # the peak velocity minus a typical half saccade duration
+        if thres_crossings.size == 0:
+            saccade_onsets[tr] = w_start + peak_idx - dt
+            print(f"Warning: No threshold crossing in trial {tr}")
+            continue
+
+        # Find the difference between the index of the peak and the indices  
+        # of all threshold crossings. The smallest positive difference reflects  
+        # the main threshold crossing (main saccade onset) because the peak 
+        # comes soon after the onset.
+        peak_onset_diff = peak_idx - thres_crossings
+        # Replace negatives with infinite, to not be picked up as minima
+        peak_onset_diff_pos = np.where(peak_onset_diff >= 0, peak_onset_diff, np.inf)
+
+        # If there are no positives, assign as saccade onset
+        # the peak velocity minus a typical half saccade duration
+        if np.isinf(peak_onset_diff_pos).all():
+            saccade_onsets[tr] = w_start + peak_idx - dt
+            print(f"Warning: No onset followed by the peak in trial {tr}")
+            continue
+
+        # Find the index of the smallest positive difference (main saccade onset)
+        main_idx = np.argmin(peak_onset_diff_pos)
+        # Find the index of the main saccade onset
+        s_onset_idx = thres_crossings[main_idx]
+        # Save the trial's saccade onset
+        saccade_onsets[tr] = w_start + s_onset_idx
+
+    return saccade_onsets
 
 
 def _build_mne_events(event_onsets, lstg):
@@ -363,6 +396,7 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
     w1, w2 = preproc_funcs.windows(onset, k=k)
     t0 = -round((w1-k)/1000, 2) # for bhv
     t0_ = -round(w1/1000, 2) # for mua, tfr, lfp
+    v_thres = 30 # eye velocity threshold (deg/s) to detect saccades
 
     # Utility function
     def _pick(label):
@@ -389,12 +423,13 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
     # Eye movements
     eye_x = _pick('EyeXcm')
     eye_y = _pick('EyeYcm')
-    eye_onsets = _get_eye_onsets(eye_x, eye_y, target_onsets, target_reached)
-    trial_data['eye_onsets'] = eye_onsets
+    saccade_onsets = _detect_saccade_onsets(eye_x, eye_y, target_onsets, 
+                                        target_reached, v_thres)
+    trial_data['eye_onsets'] = saccade_onsets
 
     # Select the event timestamps based on the onset
     onset_map = {'targ': target_onsets,
-                 'eye' : eye_onsets,
+                 'eye' : saccade_onsets,
                  'hand': hand_onsets,
                  'reach': target_reached}
     event_onsets = onset_map[onset]
