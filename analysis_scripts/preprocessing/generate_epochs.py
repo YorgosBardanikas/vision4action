@@ -12,13 +12,13 @@ import mne
 import utils
 import numpy as np
 import pickle
+import preproc_funcs
 from frites.io import logger
 from pandas import DataFrame
 from brainets.spectral import mt
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import savgol_filter
 from mne.time_frequency import (tfr_morlet, AverageTFR)
-from preprocessing import preproc_funcs
 
 SFREQ = 1000 # Hz
 
