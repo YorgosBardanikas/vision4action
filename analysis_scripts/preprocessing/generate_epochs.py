@@ -9,8 +9,8 @@ behavioral trigger.
 import os
 import neo
 import mne
-import numpy as np
 import utils
+import numpy as np
 import pickle
 from frites.io import logger
 from pandas import DataFrame
@@ -18,7 +18,7 @@ from brainets.spectral import mt
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import savgol_filter
 from mne.time_frequency import (tfr_morlet, AverageTFR)
-from analysis_scripts.preprocessing import preproc_funcs
+from preprocessing import preproc_funcs
 
 SFREQ = 1000 # Hz
 
@@ -434,7 +434,7 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
 
 if __name__ == '__main__':
 
-    epoch_content = 'mua'
+    epoch_content = 'bhv'
 
     for session_type in ['short12J','short12E']:
         session_group = utils.load_session_group(session_type)
