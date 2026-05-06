@@ -8,7 +8,7 @@ import mne
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
-from scipy.stats import ttest_1samp, ttest_rel, wilcoxon
+from scipy.stats import ttest_1samp, wilcoxon
 from frites.stats.stats_nonparam import confidence_interval
 
 ### ------ Time windows ------
@@ -131,15 +131,16 @@ def _compute_null(targXY):
     return null
 
 
-def compute_eye_kinematics(epochs, subj):
+def compute_kinematics(epochs, subj, effector):
     """
     Filter saturated trials and return smoothed eye velocity per target rank.
-    Returns dict {target_rank: (ntrials, ntimes)} and epochs.times.
+    Returns dict {target_rank: (ntrials, ntimes)}, epochs.times and the mask
+    of valid trial indices after discarding saturated trials.
     """
 
     target_rank = epochs.metadata['Target Rank'].to_numpy()
     times = epochs.times
-    eye_vel = epochs.get_data(picks=['Eye Velocity']).squeeze()
+    eye_vel = epochs.get_data(picks=[f'{effector} Velocity']).squeeze()
     eye_vel_filt = savgol_filter(eye_vel, 201, 2)
 
     # Discard full trials if the eye velocity is saturated even in only
@@ -157,7 +158,7 @@ def compute_eye_kinematics(epochs, subj):
 
     eye_vel_tg = {tg: eye_vel_filt[target_rank==tg][valid_trials] 
                   for tg in [2,3,4]}
-    return eye_vel_tg, times
+    return eye_vel_tg, times, valid_trials
 
 
 
@@ -165,8 +166,6 @@ def compute_eye_kinematics(epochs, subj):
 
 def plot_initial_deviation(epochs, targXY):
     """Plot cumulative distribution of initial deviation (Figure 2B)."""
-
-    assert onset == 'hand', "plot_initial_deviation requires onset='hand'."
 
     initial_deviation = compute_initial_deviation(epochs, targXY)
 
@@ -189,8 +188,6 @@ def plot_initial_deviation(epochs, targXY):
 
 def plot_directional_alignment(epochs, targXY):
     """Plot cosine similarity between hand direction and target vector (Figure 2C)."""
-
-    assert onset == 'targ', "plot_directional_alignment requires onset='targ'."
 
     times = np.arange(T1-619, T2-620) # time labels for passing the xticks
     null = _compute_null(targXY)
@@ -221,14 +218,12 @@ def plot_directional_alignment(epochs, targXY):
     return fig, ax
 
 
-def plot_eye_kinematics(epochs, subj):
+def plot_kinematics(epochs, subj, effector):
     """Plot trial-averaged eye velocity traces (Figure 2D)."""
-    
-    assert onset == 'targ', "plot_directional_alignment requires onset='targ'."
 
     colors = {2: 'teal', 3: 'darkviolet', 4: 'goldenrod'}
     y = [0.02, 0.05, 0.08] if subj == 'jazz' else [0.05, 0.1, 0.15]
-    eye_vel, times = compute_eye_kinematics(epochs, subj)
+    eye_vel, times, _ = compute_kinematics(epochs, subj, effector)
 
     # Average eye velocity
     fig = plt.figure()
@@ -247,19 +242,26 @@ def plot_eye_kinematics(epochs, subj):
     return fig, ax
 
 
-def plot_distributions_across_targets(epochs):
+def plot_distributions_across_targets(epochs, subj, effector):
     """Plot the distributions of a behavioral variable across targets.
     Examples: reaction times, movement durations etc."""
 
     # Unpack behavioral data
     target_rank = epochs.metadata['Target Rank'].to_numpy()
-    reaction_times = epochs.metadata['Hand Reaction Times'].to_numpy()
+    hand_reaction_times = epochs.metadata['Hand Reaction Times'].to_numpy()
+    eye_reaction_times = epochs.metadata['Eye Reaction Times'].to_numpy()
     segment_duration = epochs.metadata['Segment Duration'].to_numpy()
-    movement_duration = segment_duration - reaction_times
+    hand_eye_delay = epochs.metadata['Hand-Eye Delay'].to_numpy()
+    movement_duration = segment_duration - hand_reaction_times
+    _,_,valid = compute_kinematics(epochs, subj, effector)
 
-    def _plot_and_stats(beh):
+    def _plot_and_stats(beh, valid=None):
+        """Plot the distributions and print the statistics."""
 
-        data = [beh[target_rank == tg] for tg in [2,3,4]]
+        if valid is not None: 
+            data = [beh[target_rank == tg][valid] for tg in [2,3,4]]
+        else: 
+            data = [beh[target_rank == tg] for tg in [2,3,4]]
 
         fig = plt.figure()
         ax = plt.gca()
@@ -272,7 +274,7 @@ def plot_distributions_across_targets(epochs):
         inds = np.arange(1, len(medians) + 1)
         ax.scatter(inds, medians, marker='o', color='w', s=20, zorder=3)
         plt.vlines(inds, quartile1, quartile3, color='k', linestyle='-', lw=5)
-        plt.vlines(inds, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
+        # plt.vlines(inds, whiskers_min, whiskers_max, color='k', linestyle='-', lw=1)
 
         colors = ['teal','darkviolet','goldenrod']
         for i,p in enumerate(parts['bodies']):
@@ -291,17 +293,22 @@ def plot_distributions_across_targets(epochs):
 
         return fig, ax
     
-    print('   Reaction Times')
-    _plot_and_stats(reaction_times)
+    print('   Hand Reaction Times')
+    _plot_and_stats(hand_reaction_times)
+    print('   Eye Reaction Times')
+    _plot_and_stats(eye_reaction_times, valid=valid)
     print('   Movement Durations')
     _plot_and_stats(movement_duration)
+    print('   Hand Eye Delay')
+    _plot_and_stats(hand_eye_delay, valid=valid)
 
 
 
 if __name__ == '__main__':
 
-    subj  = 'enya'
-    onset = 'targ'
+    subj  = 'jazz'
+    onset = 'newhand'
+    effector = 'Eye' # 'Eye' or 'Hand'
     session_type = 'short12J' if subj == 'jazz' else 'short12E'
 
     # Load epochs of behavior
@@ -315,12 +322,12 @@ if __name__ == '__main__':
     targXY = np.load(os.path.join(utils.PATH, targ_file))
 
     # Plot Figure 2B
-    plot_initial_deviation(epochs, targXY)
+    # plot_initial_deviation(epochs, targXY)
     # Plot Figure 2C
-    plot_directional_alignment(epochs, targXY)
+    # plot_directional_alignment(epochs, targXY)
     # Plot Figure 2D
-    plot_eye_kinematics(epochs, subj)
+    plot_kinematics(epochs, subj, effector)
     # Plot Figure 2X
-    plot_distributions_across_targets(epochs)
+    # plot_distributions_across_targets(epochs, subj, effector)
     
     plt.show()
