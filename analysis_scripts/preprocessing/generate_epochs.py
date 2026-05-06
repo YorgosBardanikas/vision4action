@@ -209,10 +209,8 @@ def _create_bhv_epochs(anasig_behav, hand_x, hand_y, eye_x, eye_y,
                        targetID, trial_data, t0, k, v4a_dir):
     """Compute all behavioral signals and save a multi-channel MNE Epochs file."""
 
-    eye_vel = preproc_funcs.calculate_vel(anasig_behav, event_onsets,
-                                         onset, session_name, targetID, 'Eye')
-    hand_vel = preproc_funcs.calculate_vel(anasig_behav, event_onsets,
-                                         onset, session_name, targetID, 'Hand')
+    eye_vel = preproc_funcs.calculate_vel(anasig_behav, event_onsets, onset, 'Eye')
+    hand_vel = preproc_funcs.calculate_vel(anasig_behav, event_onsets, onset, 'Hand')
     hand_eye_dist = preproc_funcs.calculate_hand_eye_dist(
                          hand_x, hand_y, eye_x, eye_y, event_onsets, onset)
     hand_targ_dist = preproc_funcs.calculate_bhv_targ_dist(
