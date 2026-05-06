@@ -12,8 +12,8 @@ from matplotlib.colors import LinearSegmentedColormap
 
 # ---------------------------------
 CWD = os.getcwd()
-if 'INT' in CWD:
-    S = '/envau/work/comco/bardanikas.g' 
+if ('INT' in CWD) or ('envau' in CWD):
+    S = '/envau/work/comco/bardanikas.g'
 elif 'scratch' in CWD:
     S = '/scratch/gbardanikas'
 PATH = S + '/Vision4Action/V4A_data'
