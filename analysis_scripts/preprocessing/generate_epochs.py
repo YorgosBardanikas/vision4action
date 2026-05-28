@@ -128,6 +128,39 @@ def _get_hand_onsets(target_onsets, target_reached, segBehavior):
     return allMovOnsets[indices]
 
 
+def _detect_hand_onsets(hand_x, hand_y, target_onsets, target_reached):
+    """Detect hand onset per trial from peak hand velocity."""
+    ntrials = target_onsets.shape[0]
+    hand_onsets = np.zeros(ntrials, dtype=int)
+    buffer = 200  # dwelling time (in ms) before initiating a hand movement
+    dt = 150 # typical durations of movement onset to peak (in ms)
+
+    for tr, (t_on, t_r) in enumerate(zip(target_onsets, target_reached)):
+
+        w_start = t_on - buffer # to allow anticipatory hand movement before target onset
+        w_end = t_r + 1
+        x = hand_x[w_start : w_end]
+        y = hand_y[w_start : w_end]
+        vx = savgol_filter(np.diff(x), 11, 2) * SFREQ
+        vy = savgol_filter(np.diff(y), 11, 2) * SFREQ
+        v = np.sqrt(vx**2 + vy**2)
+        peak_idx = np.argmax(v)
+        v_thres = 0.05 * v.max()
+        below_thresh = np.where(v[:peak_idx] < v_thres)[0]
+
+        # If there are no time points below the threshold, assign as movement onset
+        # the peak velocity minus a typical half movement duration, else find the 
+        # next index after the last below threshold.
+        if len(below_thresh) == 0:
+            onset_idx = peak_idx - dt
+        else:
+            onset_idx = below_thresh[-1] + 1
+
+        hand_onsets[tr] = w_start + onset_idx
+
+    return hand_onsets
+
+
 def _detect_saccade_onsets(eye_x, eye_y, target_onsets, target_reached, v_thres):
     """Detect saccade onset per trial from peak eye velocity."""
     ntrials = target_onsets.shape[0]
@@ -143,8 +176,8 @@ def _detect_saccade_onsets(eye_x, eye_y, target_onsets, target_reached, v_thres)
         y = eye_y[w_start : w_end]
         vx = savgol_filter(np.diff(x), 11, 2) * SFREQ
         vy = savgol_filter(np.diff(y), 11, 2) * SFREQ
-
         v = np.sqrt(vx**2 + vy**2)
+
         v_binary = (v > v_thres).astype(int)
         thres_crossings = np.where(np.diff(v_binary) == 1)[0]
         peak_idx = np.argmax(v)
@@ -396,12 +429,7 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
     w1, w2 = preproc_funcs.windows(onset, k=k)
     t0 = -round((w1-k)/1000, 2) # for bhv
     t0_ = -round(w1/1000, 2) # for mua, tfr, lfp
-    v_thres = 30 # eye velocity threshold (deg/s) to detect saccades
-
-    # Utility function
-    def _pick(label):
-        mask = anasig_ch_names == label
-        return np.array(anasig_behav[:, mask]).squeeze()
+    v_thres = 30 # eye velocity threshold (cm/s) to detect saccades
 
     # Trials
     trial_data = _parse_trials(segBehavior, targetID)
@@ -414,10 +442,16 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
     anasig_behav = segBehavior.filter(name='Behavioural Signals [cm]')[0]
     anasig_ch_names = anasig_behav.array_annotations['channel_names']
 
+    # Utility function
+    def _pick(label):
+        mask = anasig_ch_names == label
+        return np.array(anasig_behav[:, mask]).squeeze()
+
     # Hand movements
     hand_x = _pick('HandXcm')
     hand_y = _pick('HandYcm')
-    hand_onsets = _get_hand_onsets(target_onsets, target_reached, segBehavior)
+    # hand_onsets = _get_hand_onsets(target_onsets, target_reached, segBehavior)
+    hand_onsets = _detect_hand_onsets(hand_x, hand_y, target_onsets, target_reached)
     trial_data['hand_onsets'] = hand_onsets
 
     # Eye movements
@@ -516,6 +550,6 @@ if __name__ == '__main__':
             segBehavior = segments['visual']
 
             for targetID in [2,3,4]: # target 1 corresponds to initial central target of trial initiation
-                for onset in ['eye']:
+                for onset in ['hand']:
                     generate_epoch_files(analogSignal, segBehavior, block, session, 
                                             onset, epoch_content, targetID, v4a_dir)
