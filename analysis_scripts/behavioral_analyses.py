@@ -12,6 +12,7 @@ from scipy.stats import ttest_1samp, wilcoxon
 from frites.stats.stats_nonparam import confidence_interval
 
 ### ------ Time windows ------
+SFREQ = 1000          # Hz sampling rate of behavioral recordings
 T1, T2   = 320, 1220  # -300 ms to +600 ms around target onset
 HT1, HT2 = 620, 820   # 0 to 200 ms after movement onset
 
@@ -133,7 +134,7 @@ def _compute_null(targXY):
 
 def compute_kinematics(epochs, subj, effector):
     """
-    Compute smooth velocity of the hand or the eye (effector) per target rank.
+    Compute smooth velocity (cm/s) of the hand or the eye (effector) per target rank.
     In case of 'Eye', discard trials where eye velocity saturated.
     Returns dict {target_rank: (ntrials, ntimes)}, epochs.times and the mask
     of valid trial indices after discarding saturated trials.
@@ -145,7 +146,7 @@ def compute_kinematics(epochs, subj, effector):
     w_filt = 11 if effector == 'Eye' else 101
     times = epochs.times
     vel = epochs.get_data(picks=[f'{effector} Velocity']).squeeze()
-    vel_filt = savgol_filter(vel, w_filt, 2)
+    vel_filt = savgol_filter(vel, w_filt, 2) * SFREQ
 
     if effector == 'Eye':
         # Discard full trials if the (eye) velocity is saturated even in only
@@ -244,7 +245,7 @@ def plot_kinematics(epochs, subj, effector):
 
     ax.axvline(0, color='k', linestyle='--')
     ax.set_xticks([-0.2, 0, 0.2, 0.4, 0.6], [])
-    ax.set_yticks(y, [])
+    # ax.set_yticks(y, [])
     ax.spines[['right', 'top']].set_visible(False)
     return fig, ax
 
@@ -260,11 +261,6 @@ def plot_distributions_across_targets(epochs, subj, effector):
     segment_duration = epochs.metadata['Segment Duration'].to_numpy()
     hand_eye_delay = epochs.metadata['Hand-Eye Delay'].to_numpy()
     movement_duration = segment_duration - hand_reaction_times
-
-    if effector == 'Eye':
-        # Get the indices of the valid eye trials
-        _,_,valid = compute_kinematics(epochs, subj, effector)
-    else: valid = None # all trials are valid for hand movements
 
     def _plot_and_stats(beh, valid=None):
         """Plot the distributions and print the statistics."""
@@ -303,22 +299,28 @@ def plot_distributions_across_targets(epochs, subj, effector):
 
         return fig, ax
     
-    print('   Hand Reaction Times')
-    _plot_and_stats(hand_reaction_times)
-    print('   Eye Reaction Times')
-    # _plot_and_stats(eye_reaction_times, valid=valid)
-    print('   Movement Durations')
-    # _plot_and_stats(movement_duration)
-    print('   Hand Eye Delay')
-    _plot_and_stats(hand_eye_delay, valid=valid)
+    if effector == 'Hand':
+        # all trials are valid for hand movements
+        print('   Hand Reaction Times')
+        _plot_and_stats(hand_reaction_times)
+        print('   Movement Durations')
+        _plot_and_stats(movement_duration)
+
+    elif effector == 'Eye':
+        # Get the indices of the valid eye trials
+        _,_,valid = compute_kinematics(epochs, subj, effector)
+        print('   Eye Reaction Times')
+        _plot_and_stats(eye_reaction_times, valid=valid)
+        print('   Hand Eye Delay')
+        _plot_and_stats(hand_eye_delay, valid=valid)
 
 
 
 if __name__ == '__main__':
 
     subj  = 'jazz'
-    onset = 'targ' # 'targ','eye' or 'hand'
-    effector = 'Eye' # 'Eye' or 'Hand'
+    onset = 'hand' # 'targ','eye' or 'hand'
+    effector = 'Hand' # 'Eye' or 'Hand'
     session_type = 'short12J' if subj == 'jazz' else 'short12E'
 
     # Load epochs of behavior
