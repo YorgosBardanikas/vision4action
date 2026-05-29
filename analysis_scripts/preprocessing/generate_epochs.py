@@ -10,8 +10,9 @@ import os
 import neo
 import mne
 import utils
-import numpy as np
 import pickle
+import numpy as np
+import xarray as xr
 import preproc_funcs
 from frites.io import logger
 from pandas import DataFrame
@@ -128,35 +129,31 @@ def _get_hand_onsets(target_onsets, target_reached, segBehavior):
     return allMovOnsets[indices]
 
 
-def _detect_hand_onsets(hand_x, hand_y, target_onsets, target_reached):
+def _detect_hand_onsets(hand_x, hand_y, target_onsets, target_reached, targetID):
     """Detect hand onset per trial from peak hand velocity."""
     ntrials = target_onsets.shape[0]
     hand_onsets = np.zeros(ntrials, dtype=int)
     buffer = 200  # dwelling time (in ms) before initiating a hand movement
-    dt = 150 # typical durations of movement onset to peak (in ms)
+    coef = 0.05 # threshold coefficient 5% of v_max - v_min
 
     for tr, (t_on, t_r) in enumerate(zip(target_onsets, target_reached)):
 
-        w_start = t_on - buffer # to allow anticipatory hand movement before target onset
+        # Add buffer to allow anticipatory movement onsets before target onset
+        w_start = t_on - buffer 
         w_end = t_r + 1
         x = hand_x[w_start : w_end]
         y = hand_y[w_start : w_end]
         vx = savgol_filter(np.diff(x), 11, 2) * SFREQ
         vy = savgol_filter(np.diff(y), 11, 2) * SFREQ
         v = np.sqrt(vx**2 + vy**2)
-        peak_idx = np.argmax(v)
-        v_thres = 0.05 * v.max()
-        below_thresh = np.where(v[:peak_idx] < v_thres)[0]
 
-        # If there are no time points below the threshold, assign as movement onset
-        # the peak velocity minus a typical half movement duration, else find the 
-        # next index after the last below threshold.
-        if len(below_thresh) == 0:
-            onset_idx = peak_idx - dt
-        else:
-            onset_idx = below_thresh[-1] + 1
+        # Find the peak between target onset until target reached
+        peak_idx = np.argmax(v[buffer:]) + buffer
 
-        hand_onsets[tr] = w_start + onset_idx
+        v_prepeak = v[:peak_idx]
+        v_thres = coef * (v.max() - v_prepeak.min()) + v_prepeak.min()
+        below_thresh = np.where(v_prepeak < v_thres)[0]
+        hand_onsets[tr] = w_start + below_thresh[-1]
 
     return hand_onsets
 
@@ -235,10 +232,10 @@ def _epoch_signal(signal, channels, event_onsets, w1, w2):
     ntrials = len(event_onsets)
     nchannels = len(channels)
     ntimes = w1 + w2
-    signal = np.zeros((ntrials, nchannels, ntimes))
+    signal_aligned = np.zeros((ntrials, nchannels, ntimes))
     for e, ev_onset in enumerate(event_onsets):
-        signal[e] = signal[channels, ev_onset-w1 : ev_onset+w2]
-    return signal
+        signal_aligned[e] = signal[channels, ev_onset-w1 : ev_onset+w2]
+    return signal_aligned
 
 
 def _load_area_channels(session_name, visual_nchannels):
@@ -376,6 +373,69 @@ def _create_neural_epochs(analogSignal, content, event_onsets, trial_data,
         return signalEpochs
 
 
+def _create_spike_epochs(segments, trial_data, event_onsets, w1, w2, 
+                         session_name, content, onset, v4a_dir, targetID):
+    """
+    Build and save Gaussian-convolved firing rate epochs from spike trains.
+    """
+    min_spike_count = 100 # minimum spike count for a neuron to be considered
+    spike_trains_areas = {}
+    units_id, units_type = [],[]
+
+    for area,segment in segments.items():
+
+        sp_times = segment.spiketrains._items
+        valid_trains = [s for s in sp_times 
+                        if len(s) > min_spike_count and
+                        s.annotations['sorter'] == 'Fred' and
+                        s.annotations['unit_type'] != 'noise']
+        spike_times = [np.array(s.magnitude * SFREQ, dtype=int)
+                       for s in valid_trains]
+        units_id.extend([s.annotations['implantation_site'] + '_' + \
+                        str(int(''.join(filter(str.isdigit, s.annotations['id']))))
+                        for s in valid_trains])
+        units_type.extend([s.annotations['unit_type']
+                          for s in valid_trains])
+
+        n_units = len(spike_times)
+        n_times = int(float(segment.t_stop) * SFREQ)
+        spike_trains = np.zeros((n_units, n_times))
+
+        for i, spikes in enumerate(spike_times):
+            spike_trains[i, spikes] = 1
+
+        spike_trains_areas[area] = spike_trains
+
+    area_names = list(segments.keys())
+    maxTime = min(spike_trains_areas[a].shape[1] for a in area_names)
+    spike_trains_array = np.concatenate([spike_trains_areas[a][:, :maxTime]
+                                        for a in area_names])
+
+    firing_rates = gaussian_filter1d(spike_trains_array, sigma=5, axis=-1)
+
+    # Cut the firing rates in trial epochs
+    ntrials = len(event_onsets)
+    nunits = firing_rates.shape[0]
+    ntimes = w1 + w2
+    firing_rate_epochs = np.zeros((ntrials, nunits, ntimes))
+
+    for e, ev_onset in enumerate(event_onsets):
+        firing_rate_epochs[e] = firing_rates[:, ev_onset-w1 : ev_onset+w2]
+
+    # Save
+    lstg = trial_data['lstg']
+    times = np.arange(-w1,w2)
+    firing_rates_xr = xr.DataArray(firing_rate_epochs,
+                                   dims=['trials','units','times'],
+                                   coords=[lstg, units_id, times])
+    firing_rates_xr = firing_rates_xr.assign_coords(
+                                    {'unit_type': ('units',units_type)})
+
+    xr_file = f'{session_name}_{content}_{onset}{targetID}.nc'
+    logger.info(f'Saving firing rate epochs: "{xr_file}"')
+    firing_rates_xr.to_netcdf(os.path.join(v4a_dir, xr_file), engine='h5netcdf')
+
+
 def _create_tfr_epochs(signalEpochs, session_name, onset, targetID, v4a_dir):
     """Compute Morlet TFR and save."""
     n_freqs = 30
@@ -451,7 +511,8 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
     hand_x = _pick('HandXcm')
     hand_y = _pick('HandYcm')
     # hand_onsets = _get_hand_onsets(target_onsets, target_reached, segBehavior)
-    hand_onsets = _detect_hand_onsets(hand_x, hand_y, target_onsets, target_reached)
+    hand_onsets = _detect_hand_onsets(hand_x, hand_y, target_onsets, 
+                                      target_reached, targetID)
     trial_data['hand_onsets'] = hand_onsets
 
     # Eye movements
@@ -550,6 +611,6 @@ if __name__ == '__main__':
             segBehavior = segments['visual']
 
             for targetID in [2,3,4]: # target 1 corresponds to initial central target of trial initiation
-                for onset in ['hand']:
+                for onset in ['eye']:
                     generate_epoch_files(analogSignal, segBehavior, block, session, 
                                             onset, epoch_content, targetID, v4a_dir)
