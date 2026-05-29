@@ -29,13 +29,31 @@ def load_hand_xy(epochs):
     return hand_xy
 
 
-def get_target_xy(epochs, targXY):
-    """Return (ntrials, 2) array of target positions for each trial."""
+def get_target_xy(epochs, targXY, n_perms=1000):
+    """Return target positions and their permutations (optional) for each trial."""
+    
+    def _get_target_xy(targXY, currentTargetID):
+        """Return (ntrials, 2) array of target positions for each trial."""
+        x_ = targXY[0, currentTargetID]
+        y_ = targXY[1, currentTargetID]
+        xy = np.stack((x_, y_), axis=1)
+        return xy
+    
     currentTargetID = epochs.metadata['currentTargetID'].to_numpy()-1
-    x_ = targXY[0, currentTargetID]
-    y_ = targXY[1, currentTargetID]
-    target_xy = np.stack((x_, y_), axis=1)
-    return target_xy
+    target_xy = _get_target_xy(targXY, currentTargetID)
+
+    if n_perms > 0:
+        ntrials = len(epochs)
+        target_xy_shuff = np.zeros((n_perms, ntrials, 2))
+
+        for s in range(n_perms):
+            rng = np.random.default_rng(seed=s)
+            rng.shuffle(currentTargetID)
+            target_xy_shuff[s] = _get_target_xy(targXY, currentTargetID)
+
+        return target_xy, target_xy_shuff
+    else: 
+        return target_xy
 
 
 def adjacent_values(vals, q1, q3):
@@ -60,7 +78,7 @@ def compute_initial_deviation(epochs, targXY):
     hand_xy = load_hand_xy(epochs)
     # average x,y position across the time window
     hand_avg = hand_xy[..., HT1:HT2].mean(axis=-1)
-    targ_xy = get_target_xy(epochs, targXY)
+    targ_xy = get_target_xy(epochs, targXY, n_perms=0)
 
     n1 = np.linalg.norm(hand_avg, axis=1, keepdims=True)
     n2 = np.linalg.norm(targ_xy, axis=1, keepdims=True)
@@ -84,12 +102,14 @@ def compute_directional_alignment(epochs, targXY):
     ntimes = hand_xy.shape[-1]
 
     # Get the x,y positions of the visual targets in the workspace
-    targ_xy = get_target_xy(epochs, targXY)
+    targ_xy, tg_xy_shuff = get_target_xy(epochs, targXY, n_perms=100)
     targ_xy_broadcast = np.repeat(targ_xy[..., np.newaxis], ntimes, axis=-1)
+    tg_xy_shuff_broad = np.repeat(tg_xy_shuff[..., np.newaxis], ntimes, axis=-1)
 
     # Find the vector starting from the hand position and pointing towards the 
     # current target for each timepoint
     hand_targ_vec = targ_xy_broadcast - hand_xy
+    hand_targ_shuff = tg_xy_shuff_broad - hand_xy[np.newaxis]
 
     # Find the vector of the instantaneous hand trajectory direction
     hand_drct = np.diff(hand_xy, axis=-1)
@@ -97,17 +117,24 @@ def compute_directional_alignment(epochs, targXY):
 
     # Delete last time point to align hand_targ_vec with hand_drct (due to np.diff)
     hand_targ_vec = hand_targ_vec[...,:-1]
+    hand_targ_shuff = hand_targ_shuff[...,:-1]
 
     # Find the magnitude of the vectors
     n1 = np.linalg.norm(hand_targ_vec, axis=1, keepdims=True)
     n2 = np.linalg.norm(hand_drct, axis=1, keepdims=True)
+    n_shuff = np.linalg.norm(hand_targ_shuff, axis=2, keepdims=True)
 
     # Compute the cosine similarity (dot product) between the two vectors
     directional_alignment = np.einsum('ijk,ijk->ik', 
-                                    hand_targ_vec / n1,
-                                    hand_drct / n2)
+                                      hand_targ_vec / n1,
+                                      hand_drct / n2)
     
-    return directional_alignment, target_rank
+    # Compute the cosine similarity for the shuffled vectors
+    dir_al_shuff = np.einsum('pijk,ijk->pik', 
+                             hand_targ_shuff / n_shuff,
+                             hand_drct / n2)
+
+    return directional_alignment, dir_al_shuff, target_rank
 
 
 def _compute_null(targXY):
@@ -146,12 +173,12 @@ def compute_kinematics(epochs, subj, effector):
     w_filt = 11 if effector == 'Eye' else 101
     times = epochs.times
     vel = epochs.get_data(picks=[f'{effector} Velocity']).squeeze()
-    vel_filt = savgol_filter(vel, w_filt, 2) * SFREQ
+    vel_filt = savgol_filter(vel * SFREQ, w_filt, 2) 
 
     if effector == 'Eye':
         # Discard full trials if the (eye) velocity is saturated even in only
         # one of the 2nd, 3rd or 4th targets.
-        sat_thres = 100 if subj == 'jazz' else 200
+        sat_thres = 100*SFREQ if subj == 'jazz' else 200*SFREQ
         mask = np.zeros((ntg,ntrials_per_tg), dtype=bool)
 
         for i,tg in enumerate(tgs):
@@ -202,24 +229,29 @@ def plot_directional_alignment(epochs, targXY):
     null_per_target = {2:0, 3:null, 4:null}
     colors = {2:'teal', 3:'darkviolet', 4:'goldenrod'}
     y  = {2:-0.8, 3:-0.85, 4:-0.9}
-    directional_alignment, target_rank = compute_directional_alignment(epochs, targXY)
+    dir_al, dir_al_shuff, target_rank = compute_directional_alignment(epochs, targXY)
 
     fig = plt.figure()
     ax = plt.gca()
     for tg in [2,3,4]:
-        da_tg = directional_alignment[target_rank==tg]
+
+        da_tg = dir_al[target_rank==tg]
         mean_da_tg = da_tg.mean(axis=0)
-        p = ttest_1samp(da_tg, null_per_target[tg], axis=0, alternative='greater')[1]
-        pv = np.where(p < 0.05, y[tg], np.nan)
-        conf = confidence_interval(da_tg, axis=0).squeeze()
+        conf = confidence_interval(da_tg, cis=99, axis=0).squeeze()
+        # p = ttest_1samp(da_tg, null_per_target[tg], axis=0, alternative='greater')[1]
+        # pv = np.where(p < 0.05, y[tg], np.nan)
+        
+        da_shuff_tg = dir_al_shuff[:,target_rank==tg,:]
+        low, upp = np.percentile(da_shuff_tg.mean(1), [0.1,99.9], axis=0)
 
         ax.plot(times, mean_da_tg, color=colors[tg], lw=3)
-        ax.scatter(times, pv, s=3, color=colors[tg])
+        # ax.scatter(times, pv, s=3, color=colors[tg])
         ax.fill_between(times, conf[0], conf[1], color=colors[tg], alpha=0.3)
+        ax.fill_between(times, low, upp, color=colors[tg], alpha=0.2, ls='--')
 
     ax.axvline(0, color='k',    linestyle='--')
     ax.axhline(0, color='grey', linestyle=':')
-    ax.axhline(0.25, color='grey', linestyle=':')
+    ax.axhline(null, color='grey', linestyle=':')
     ax.spines[['right', 'top']].set_visible(False)
     ax.set_xticks([-200, 0, 200, 400, 600], [])
     ax.set_yticks([-1, 0, 0.25, 1], [])
@@ -230,22 +262,25 @@ def plot_kinematics(epochs, subj, effector):
     """Plot trial-averaged hand/eye velocity traces."""
 
     colors = {2: 'teal', 3: 'darkviolet', 4: 'goldenrod'}
-    y = [0.02, 0.05, 0.08] if subj == 'jazz' else [0.05, 0.1, 0.15]
     vel, times, _ = compute_kinematics(epochs, subj, effector)
 
     # Average eye velocity
     fig = plt.figure()
     ax = plt.gca()
+    # plt.subplots(1,3)
     for tg in [2,3,4]:
-        avg  = vel[tg].mean(axis=0)
+        avg = vel[tg].mean(axis=0)
+        # avg = vel[tg]
+        # plt.subplot(1,3,tg-1)
+        # plt.pcolormesh(times, np.arange(avg.shape[0]), avg)
+        # plt.axvline(0, color='k', linestyle='--')
         conf = confidence_interval(vel[tg], axis=0, cis=95).squeeze()
         ax.plot(times[T1:T2], avg[T1:T2], color=colors[tg], linewidth=3)
         ax.fill_between(times[T1:T2], conf[0, T1:T2], conf[1, T1:T2],
                             color=colors[tg], alpha=0.3)
 
     ax.axvline(0, color='k', linestyle='--')
-    ax.set_xticks([-0.2, 0, 0.2, 0.4, 0.6], [])
-    # ax.set_yticks(y, [])
+    # ax.set_xticks([-0.2, 0, 0.2, 0.4, 0.6], [])
     ax.spines[['right', 'top']].set_visible(False)
     return fig, ax
 
@@ -319,8 +354,8 @@ def plot_distributions_across_targets(epochs, subj, effector):
 if __name__ == '__main__':
 
     subj  = 'jazz'
-    onset = 'hand' # 'targ','eye' or 'hand'
-    effector = 'Hand' # 'Eye' or 'Hand'
+    onset = 'eye' # 'targ','eye' or 'hand'
+    effector = 'Eye' # 'Eye' or 'Hand'
     session_type = 'short12J' if subj == 'jazz' else 'short12E'
 
     # Load epochs of behavior
