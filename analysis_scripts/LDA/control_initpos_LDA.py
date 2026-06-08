@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 
 # Load the MUA and behavioral data
-subj = 'enya'
+subj = 'jazz'
 # alignement on hand movement onset to avoid misclassification purely due to 
 # early-initiated trials, and not due to anticipation/initial position effects.
 onset = 'hand'
@@ -36,20 +36,23 @@ areas = ['7A','M1']
 events = epochs.events[:,2]
 
 # trial codes to identify movements on the train_group
-train2 = [[11,7,8,9],[15,18,13,16],[15,7,13,9],[11,18,8,16]]
-train_lists = [[2,3,4,6], train2]
+train2 = [2,3,4,6]
+train_lists = [[11,7,8,9],[15,18,13,16],[15,7,13,9],[11,18,8,16]]
 
 # trial codes to identify movements on the test_group
 test_lists = [[15,18,13,16],[11,7,8,9],[11,18,8,16],[15,7,13,9]]
 
-exts = ['left','right','top','bottom']
-# codes to remap 
+# codes to remap
 n_list = [100,101]
+
+# file extensions to save based on trajectories in the test group
+exts = ['left','right','top','bottom']
 
 for train_list, test_list, ext in zip(train_lists, test_lists, exts):
 
-    # remap [2,3,4,6] to 100 and train2 to 101
-    for tr, n in zip(train_list, n_list):
+    # remap [2,3,4,6] to 100 and train_list to 101
+    train2_list = [train2, train_list]
+    for tr, n in zip(train2_list, n_list):
         events = np.where(np.isin(events, tr), n, events)
 
     # balance the number of trials in the two classes
@@ -108,7 +111,7 @@ for train_list, test_list, ext in zip(train_lists, test_lists, exts):
                         dims=['areas','timebins','perms','trials'],
                         coords=[areas, tmins, np.arange(nperms), true_trials])
 
-    path = 'path_to_directory/LDA/'
+    path = f'{utils.PATH}/LDA_6dirs/initpos'
     variables = [lda_predictions, lda_predictions_shuff]
     filenames = [f'{subj}-{onset}-{content}_LDA_predictions_test_{ext}.nc',
                  f'{subj}-{onset}-{content}_LDA_predictions_shuffled_{ext}.nc']
