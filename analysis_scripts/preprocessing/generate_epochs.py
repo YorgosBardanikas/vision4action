@@ -143,17 +143,50 @@ def _detect_hand_onsets(hand_x, hand_y, target_onsets, target_reached, targetID)
         w_end = t_r + 1
         x = hand_x[w_start : w_end]
         y = hand_y[w_start : w_end]
-        vx = savgol_filter(np.diff(x), 11, 2) * SFREQ
-        vy = savgol_filter(np.diff(y), 11, 2) * SFREQ
+
+        # Compute 2d-velocity from x,y hand positions
+        vx = savgol_filter(np.diff(x), 51, 2) * SFREQ
+        vy = savgol_filter(np.diff(y), 51, 2) * SFREQ
         v = np.sqrt(vx**2 + vy**2)
 
         # Find the peak between target onset until target reached
         peak_idx = np.argmax(v[buffer:]) + buffer
 
+        # Find where the acceleration changes sign before the peak
         v_prepeak = v[:peak_idx]
-        v_thres = coef * (v.max() - v_prepeak.min()) + v_prepeak.min()
-        below_thresh = np.where(v_prepeak < v_thres)[0]
-        hand_onsets[tr] = w_start + below_thresh[-1]
+        accel = savgol_filter(np.diff(v_prepeak), 151, 2)
+        local_min_idxs = np.where((accel[:-1] < 0) & (accel[1:] >= 0))[0] + 1
+
+        if len(local_min_idxs) == 0: 
+            trough_idx = np.argmin(v_prepeak)
+        else: 
+            trough_idx = local_min_idxs[-1]
+
+        # In case that the last local minimum is larger than 50% of the peak
+        # which means that is not a real minimum (there is hand velocity before)
+        # select the second to last minimum. Continue until you find a minimum
+        # that satisfies the condition.
+        counter = -2
+        while v[trough_idx] > 0.3 * v[peak_idx]:
+            counter -= 1
+            try:
+                trough_idx = local_min_idxs[counter]
+            except IndexError: 
+                trough_idx = np.argmin(v_prepeak)
+                break
+
+        # Find all points below a velocity threshold between trough and peak
+        v_search = v[trough_idx:peak_idx]
+        v_thres = coef * (v[peak_idx] - v[trough_idx]) + v[trough_idx]
+        below_thresh = np.where(v_search < v_thres)[0]
+
+        # Movement onset is the last point below threshold (or the trough itself)
+        if len(below_thresh) == 0: 
+            onset_idx = trough_idx
+        else: 
+            onset_idx = trough_idx + below_thresh[-1] + 1
+        
+        hand_onsets[tr] = w_start + onset_idx
 
     return hand_onsets
 
@@ -333,7 +366,7 @@ def _create_bhv_epochs(anasig_behav, hand_x, hand_y, eye_x, eye_y,
     bhvEpochs.save(os.path.join(v4a_dir, epoch_file), overwrite=True)
 
 
-def _create_neural_epochs(analogSignal, content, event_onsets, trial_data,
+def _create_neural_epochs(neuralSignal, content, event_onsets, trial_data,
                           w1, w2, t0_, v4a_dir, session_name,
                           onset, targetID, save=True):
     """Cut the neural signal in epochs, normalize and save.
@@ -341,14 +374,14 @@ def _create_neural_epochs(analogSignal, content, event_onsets, trial_data,
 
     if content == 'bnrmua':
         # Convolve with a Gaussian kernel (size: 2*sigma*truncate, 40ms)
-        visualSig = gaussian_filter1d(analogSignal['visual'].astype(float), sigma=5, axis=1)
-        motorSig  = gaussian_filter1d(analogSignal['motor'].astype(float),  sigma=5, axis=1)
+        visualSig = gaussian_filter1d(neuralSignal['visual'].astype(float), sigma=5, axis=1)
+        motorSig  = gaussian_filter1d(neuralSignal['motor'].astype(float),  sigma=5, axis=1)
     elif content == 'mua':
-        visualSig = analogSignal['visual'] # shape (nchannels, ntimes)
-        motorSig  = analogSignal['motor']
+        visualSig = neuralSignal['visual'] # shape (nchannels, ntimes)
+        motorSig  = neuralSignal['motor']
     else: # for hga, beta, tfr : get the LFP
-        visualSig = analogSignal['visual'].rescale('V').magnitude.T    
-        motorSig = analogSignal['motor'].rescale('V').magnitude.T 
+        visualSig = neuralSignal['visual'].rescale('V').magnitude.T    
+        motorSig = neuralSignal['motor'].rescale('V').magnitude.T 
 
     # Align the visual and motor signals, concatenate and normalize
     maxTime = min(visualSig.shape[1], motorSig.shape[1])
@@ -373,29 +406,36 @@ def _create_neural_epochs(analogSignal, content, event_onsets, trial_data,
         return signalEpochs
 
 
-def _create_spike_epochs(segments, trial_data, event_onsets, w1, w2, 
+def _create_spike_epochs(neuralSignal, trial_data, event_onsets, w1, w2, 
                          session_name, content, onset, v4a_dir, targetID):
     """
     Build and save Gaussian-convolved firing rate epochs from spike trains.
     """
+    sorters = ['Fred','Alexa','Thomas']
     min_spike_count = 100 # minimum spike count for a neuron to be considered
     spike_trains_areas = {}
     units_id, units_type = [],[]
 
-    for area,segment in segments.items():
-
+    for area,segment in neuralSignal.items():
+        
         sp_times = segment.spiketrains._items
+        # valid_trains = [s for s in sp_times 
+        #                 if len(s) > min_spike_count and
+        #                 s.annotations['sorter'] in sorters and
+        #                 s.annotations['unit_type'] != 'noise']
         valid_trains = [s for s in sp_times 
-                        if len(s) > min_spike_count and
-                        s.annotations['sorter'] == 'Fred' and
-                        s.annotations['unit_type'] != 'noise']
+                        if len(s) > min_spike_count]
+        if not valid_trains: 
+            valid_trains = sp_times
+            logger.info(f'Session {session_name} does not include good sorted units.')
+
         spike_times = [np.array(s.magnitude * SFREQ, dtype=int)
                        for s in valid_trains]
         units_id.extend([s.annotations['implantation_site'] + '_' + \
                         str(int(''.join(filter(str.isdigit, s.annotations['id']))))
                         for s in valid_trains])
-        units_type.extend([s.annotations['unit_type']
-                          for s in valid_trains])
+        # units_type.extend([s.annotations['unit_type']
+        #                   for s in valid_trains])
 
         n_units = len(spike_times)
         n_times = int(float(segment.t_stop) * SFREQ)
@@ -428,8 +468,8 @@ def _create_spike_epochs(segments, trial_data, event_onsets, w1, w2,
     firing_rates_xr = xr.DataArray(firing_rate_epochs,
                                    dims=['trials','units','times'],
                                    coords=[lstg, units_id, times])
-    firing_rates_xr = firing_rates_xr.assign_coords(
-                                    {'unit_type': ('units',units_type)})
+    # firing_rates_xr = firing_rates_xr.assign_coords(
+    #                                 {'unit_type': ('units',units_type)})
 
     xr_file = f'{session_name}_{content}_{onset}{targetID}.nc'
     logger.info(f'Saving firing rate epochs: "{xr_file}"')
@@ -478,10 +518,10 @@ def _create_power_epochs(signalEpochs, content, session_name,
 # ---------------------------- Main function ----------------------------
 # -----------------------------------------------------------------------
 
-def generate_epoch_files(analogSignal, segBehavior, block, session_name,
+def generate_epoch_files(neuralSignal, segBehavior, block, session_name,
                           onset, content, targetID, v4a_dir):
     """
-    Main entry point. Parses trials, computes onsets, then dispatches
+    Parses trials, computes onsets, then dispatches
     to the appropriate content-specific epoch creator.
     """
     # Parameters
@@ -534,15 +574,19 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
         _create_bhv_epochs(anasig_behav, hand_x, hand_y, eye_x, eye_y,
                            xTarg, yTarg, event_onsets, onset, session_name,
                            targetID, trial_data, t0, k, v4a_dir)
-
+        
+    elif content == 'units':
+        _create_spike_epochs(neuralSignal, trial_data, event_onsets, w1, w2, 
+                                session_name, content, onset, v4a_dir, targetID)
+        
     elif content in ('mua', 'bnrmua'):
-        _create_neural_epochs(analogSignal, content, event_onsets, trial_data,
+        _create_neural_epochs(neuralSignal, content, event_onsets, trial_data,
                                w1, w2, t0_, v4a_dir, session_name,
                                onset, targetID)
 
     elif content == 'tfr':
         signalEpochs = _create_neural_epochs(
-            analogSignal, content, event_onsets, trial_data,
+            neuralSignal, content, event_onsets, trial_data,
             w1, w2, t0_, v4a_dir, session_name, onset, targetID, save=False)
         
         _create_tfr_epochs(signalEpochs, trial_data, session_name,
@@ -550,7 +594,7 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
 
     elif content in ('beta', 'hga'):
         signalEpochs = _create_neural_epochs(
-            analogSignal, content, event_onsets, trial_data,
+            neuralSignal, content, event_onsets, trial_data,
             w1, w2, t0_, v4a_dir, session_name, onset, targetID, save=False)
         
         _create_power_epochs(signalEpochs, content, trial_data, session_name,
@@ -562,9 +606,10 @@ def generate_epoch_files(analogSignal, segBehavior, block, session_name,
 
 if __name__ == '__main__':
 
-    epoch_content = 'bhv'
+    epoch_content = 'mua'
 
     for session_type in ['short12J','short12E']:
+
         session_group = utils.load_session_group(session_type)
 
         for session in session_group:
@@ -582,27 +627,30 @@ if __name__ == '__main__':
                     segments[area] = block.segments[segment_to_load]
             logger.info("...done.")
 
-            # Get the MUA or LFP data depending on the 'epoch_content'
-            if epoch_content == 'bnrmua':
+            # Get the Units, MUA or LFP data depending on the 'epoch_content'
+            if epoch_content == 'units':
+                neuralSignal = segments
+
+            elif epoch_content == 'bnrmua':
                 # Get the MUA from the .pkl file
                 mua_filename = f'{session}_MUA.pkl'
-                analogSignal = _load_mua_pkl(v4a_dir, mua_filename)
+                neuralSignal = _load_mua_pkl(v4a_dir, mua_filename)
 
             elif epoch_content == 'mua':
                 # Get the MUAe from the .pkl file
                 muae_filename = f'{session}_MUAe.pkl'
-                analogSignal = _load_mua_pkl(v4a_dir, muae_filename)
+                neuralSignal = _load_mua_pkl(v4a_dir, muae_filename)
 
             elif epoch_content in ['beta','hga','tfr']: 
                 # Unpack the LFP data from the segments
-                analogSignal = {}
+                neuralSignal = {}
                 n_channels = {'motor':96, 'visual':128}
                 anasig_name = 'Downsampled (factor 30) version of nsx6'
                 for area, seg in segments.items(): 
-                    analogSignal[area] = seg.filter(name=anasig_name)[0]
+                    neuralSignal[area] = seg.filter(name=anasig_name)[0]
 
             elif epoch_content == 'bhv':
-                analogSignal = {}
+                neuralSignal = {}
             else: 
                 raise ValueError('Unknown "epoch_content".')
 
@@ -611,6 +659,6 @@ if __name__ == '__main__':
             segBehavior = segments['visual']
 
             for targetID in [2,3,4]: # target 1 corresponds to initial central target of trial initiation
-                for onset in ['eye']:
-                    generate_epoch_files(analogSignal, segBehavior, block, session, 
+                for onset in ['hand']:
+                    generate_epoch_files(neuralSignal, segBehavior, block, session, 
                                             onset, epoch_content, targetID, v4a_dir)
