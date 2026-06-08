@@ -3,9 +3,9 @@ and the null hypothesis based on shuffled trials."""
 
 import os
 import mne
-import utils
 import numpy as np
 import xarray as xr
+from analysis_scripts import utils
 from frites.io import logger
 from FIT_core import conn_fit_
 from scipy.signal import savgol_filter

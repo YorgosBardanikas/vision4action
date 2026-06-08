@@ -1,10 +1,10 @@
 
 import os
-import utils
 import numpy as np
 import xarray as xr
 from scipy.ndimage import uniform_filter1d
 from sklearn.svm import SVC
+from analysis_scripts import utils
 
 # Load the units data
 subj = 'jazz'

@@ -9,11 +9,11 @@ behavioral trigger.
 import os
 import neo
 import mne
-import utils
 import pickle
 import numpy as np
 import xarray as xr
 import preproc_funcs
+from analysis_scripts import utils
 from frites.io import logger
 from pandas import DataFrame
 from brainets.spectral import mt

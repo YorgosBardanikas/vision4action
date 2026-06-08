@@ -1,10 +1,10 @@
 
 import os
-import utils
 import math
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
+from analysis_scripts import utils
 from scipy.ndimage import uniform_filter1d
 
 # Load the units data

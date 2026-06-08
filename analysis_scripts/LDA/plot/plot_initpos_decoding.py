@@ -1,8 +1,8 @@
 """Script to plot the decoding of initial position effects."""
 
-import utils
 import numpy as np
 import xarray as xr
+from analysis_scripts import utils
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 from frites.stats import confidence_interval

@@ -5,10 +5,10 @@ based on the trial codes (true_trials)."""
 
 import os
 import mne
-import utils
 import pickle
 import numpy as np
 import xarray as xr
+from analysis_scripts import utils
 
 # Parameters setting
 subj = 'enya'

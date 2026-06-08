@@ -1,12 +1,12 @@
-"""
+""" Script to control for the effect of the sequence in the third 
+and fourth target ranks.
 """
 
 import os
 import mne
-import utils
-import pickle
 import numpy as np
 import xarray as xr
+from analysis_scripts import utils
 from joblib import Parallel, delayed
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA

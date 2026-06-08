@@ -5,10 +5,10 @@ occupies distinct states related to different movement directions.
 
 import os
 import mne
-import utils
 import pickle
 import numpy as np
 import xarray as xr
+from analysis_scripts import utils
 from joblib import Parallel, delayed
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA

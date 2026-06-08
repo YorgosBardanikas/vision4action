@@ -8,10 +8,10 @@ Downsample for computational efficiency.
 
 import os
 import mne
-import utils
 import pickle
 import numpy as np
 import xarray as xr
+from analysis_scripts import utils
 from joblib import Parallel, delayed
 from frites.io import logger
 from scipy.signal import savgol_filter

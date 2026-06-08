@@ -1,8 +1,9 @@
-import utils
+
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
+from analysis_scripts import utils
 
 subj = 'jazz'
 onset = 'targ'

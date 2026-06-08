@@ -2,9 +2,9 @@
 
 import os
 import mne
-import utils
 import numpy as np
 import xarray as xr
+from analysis_scripts import utils
 from frites.io import logger
 from joblib import Parallel, delayed
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA

@@ -2,9 +2,9 @@
 channel per area per monkey, illustrated in figure 3B."""
 
 import mne
-import utils
 import numpy as np
 import matplotlib.pyplot as plt
+from analysis_scripts import utils
 from scipy.signal import savgol_filter
 from frites.stats.stats_nonparam import confidence_interval
 

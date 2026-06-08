@@ -2,8 +2,8 @@
 (amplitude and latency) and to plot the figures 3C and 3D."""
 
 import mne
-import utils
 import numpy as np
+from analysis_scripts import utils
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 

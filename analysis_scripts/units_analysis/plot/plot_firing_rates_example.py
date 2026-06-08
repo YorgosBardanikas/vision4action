@@ -1,11 +1,11 @@
 
 import os
-import utils
 import numpy as np
 import xarray as xr
 from scipy.ndimage import uniform_filter1d
 import matplotlib.pyplot as plt
 from scipy.stats import sem
+from analysis_scripts import utils
 
 # Load the units data
 subj = 'jazz'

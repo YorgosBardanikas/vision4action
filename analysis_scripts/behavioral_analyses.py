@@ -3,9 +3,9 @@ and plots all panels of Figure 2.
 """
 
 import os
-import utils
 import mne
 import numpy as np
+from analysis_scripts import utils
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 from scipy.stats import ttest_1samp, wilcoxon, sem

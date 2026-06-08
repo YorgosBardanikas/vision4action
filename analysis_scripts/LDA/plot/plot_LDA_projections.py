@@ -1,6 +1,7 @@
-import utils
+
 import numpy as np
 import xarray as xr
+from analysis_scripts import utils
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 from matplotlib.patches import Polygon
