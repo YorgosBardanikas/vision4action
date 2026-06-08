@@ -20,7 +20,7 @@ content = 'mua'
 rgr = 'goal'
 nperms = 192
 session_type = 'short12J' if subj == 'jazz' else 'short12E'
-path = 'path_to_directory/LDA/'
+path = f'{utils.PATH}/LDA_6dirs/'
 
 epochList,epochListBhv = [],[]
 for targetID in [2,3,4]:
@@ -41,8 +41,7 @@ areas = ['7A','M1']
 if rgr == 'goal':
     """Train on the first target and test on the second and third targets."""
 
-    train = [f'Move_{i}' for i in [2,3,4,6]] # trial codes to identify movements on the train_group
-    test = [f'Move_{i}' for i in [11,15,9,16,7,18,8,13]] # same for test group
+    train = [f'Move_{i}' for i in range(1,7)] # trial codes to identify movements on the train_group
     nld = 2
     lda_list, lda_models_perms = [],[]
 
@@ -61,7 +60,7 @@ if rgr == 'goal':
 
         # Train many LDA models after shuffling the trial classes
         lda_models_perm = Parallel(n_jobs=-1)(delayed(utils.fit_lda)
-                                            (epochs_train, classes, seed) 
+                                            (lda_input, classes, seed) 
                                             for seed in range(nperms))
         lda_models_perms.append(lda_models_perm)
         
@@ -79,7 +78,7 @@ elif rgr == 'goal8020':
     """Train on the 80% of the first target trials and test on the 20% of
     the rest 20% for cross-validation."""
 
-    codes = [f'Move_{i}' for i in [2,3,4,6]]
+    codes = [f'Move_{i}' for i in range(1,7)]
     predictions, projections = [],[]
     for area in areas:
         ch_inds = mne.pick_channels_regexp(ch_names,f'{area}')
