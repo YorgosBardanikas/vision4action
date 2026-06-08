@@ -1,5 +1,5 @@
 """Script that loads the behavioral data, performs the behavioral analyses,
-and plots the figures 2B, 2C, 2D.
+and plots all panels of Figure 2.
 """
 
 import os
@@ -8,13 +8,14 @@ import mne
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
-from scipy.stats import ttest_1samp, wilcoxon
+from scipy.stats import ttest_1samp, wilcoxon, sem
 from frites.stats.stats_nonparam import confidence_interval
 
 ### ------ Time windows ------
 SFREQ = 1000          # Hz sampling rate of behavioral recordings
 T1, T2   = 320, 1220  # -300 ms to +600 ms around target onset
 HT1, HT2 = 620, 820   # 0 to 200 ms after movement onset
+COLORS = {2:'teal', 3:'darkviolet', 4:'goldenrod'}
 
 
 ### ------ Helper functions ------
@@ -199,6 +200,46 @@ def compute_kinematics(epochs, subj, effector):
 
 ### ------ Plotting functions ------
 
+def plot_trajectories(epochs, targXY):
+    """Plot example trajectories (Figure 2A)."""
+
+    colors = list(COLORS.values())
+    events = utils.group_events(epochs.events[:,2],'motor')[0]
+    targ_x, targ_y = targXY
+
+    def _get_hand_xy(label):
+        z = epochs.get_data(picks=[label]).squeeze()
+        z_filt = savgol_filter(z, 51, 2) 
+        return z_filt
+
+    hand_x = _get_hand_xy('Hand X-Position')
+    hand_y = _get_hand_xy('Hand Y-Position')
+    handSnglTrials = np.array([hand_x, hand_y]).transpose(1,0,2)  #ntrials, 2 (xy), ntimes
+
+    ev_list = [[2,9,8],[1,7,10],[3,12,9]]
+    previousT_list = [[1,4,2],[1,2,4],[1,6,4]]
+    currentT_list = [[4,2,6],[2,4,6],[6,4,2]]
+
+    for ev_codes,previousT,currentT in zip(ev_list, previousT_list, currentT_list):
+
+        plt.figure()
+        plt.axis(False)
+        utils.plot_workspace(targ_x, targ_y)
+
+        for i,(ev,pre,curr) in enumerate(zip(ev_codes,previousT,currentT)):
+
+            handSnglTrials_ = handSnglTrials[events==ev]
+            previous, current = targXY[:,pre-1], targXY[:,curr-1]
+            dx = current[0] - previous[0]
+            dy = current[1] - previous[1]
+
+            plt.arrow(previous[0], previous[1], dx, dy, head_width=0.3, 
+                        linestyle=':', head_length=0.4, fc='k', ec='k')
+            
+            for hand_ in handSnglTrials_:
+                plt.plot(hand_[0,T1:T2], hand_[1,T1:T2], color=colors[i], alpha=0.06)
+
+
 def plot_initial_deviation(epochs, targXY):
     """Plot cumulative distribution of initial deviation (Figure 2B)."""
 
@@ -225,9 +266,8 @@ def plot_directional_alignment(epochs, targXY):
     """Plot cosine similarity between hand direction and target vector (Figure 2C)."""
 
     times = np.arange(T1-619, T2-620) # time labels for passing the xticks
-    null = _compute_null(targXY)
-    null_per_target = {2:0, 3:null, 4:null}
-    colors = {2:'teal', 3:'darkviolet', 4:'goldenrod'}
+    # null = _compute_null(targXY)
+    # null_per_target = {2:0, 3:null, 4:null}
     y  = {2:-0.8, 3:-0.85, 4:-0.9}
     dir_al, dir_al_shuff, target_rank = compute_directional_alignment(epochs, targXY)
 
@@ -238,50 +278,73 @@ def plot_directional_alignment(epochs, targXY):
         da_tg = dir_al[target_rank==tg]
         mean_da_tg = da_tg.mean(axis=0)
         conf = confidence_interval(da_tg, cis=99, axis=0).squeeze()
-        # p = ttest_1samp(da_tg, null_per_target[tg], axis=0, alternative='greater')[1]
-        # pv = np.where(p < 0.05, y[tg], np.nan)
-        
-        da_shuff_tg = dir_al_shuff[:,target_rank==tg,:]
-        low, upp = np.percentile(da_shuff_tg.mean(1), [0.1,99.9], axis=0)
 
-        ax.plot(times, mean_da_tg, color=colors[tg], lw=3)
-        # ax.scatter(times, pv, s=3, color=colors[tg])
-        ax.fill_between(times, conf[0], conf[1], color=colors[tg], alpha=0.3)
-        ax.fill_between(times, low, upp, color=colors[tg], alpha=0.2, ls='--')
+        da_shuff_tg = dir_al_shuff[:,target_rank==tg,:]
+        shuff_mean = da_shuff_tg.mean(axis=(0,1))
+        shuff_std = da_shuff_tg.std(axis=(0,1))
+        low,upp = shuff_mean - (shuff_std/2), shuff_mean + (shuff_std/2)
+
+        p1 = ttest_1samp(da_tg, upp, axis=0, alternative='greater')[1]
+        p2 = ttest_1samp(da_tg, low, axis=0, alternative='less')[1]
+        pv = np.where((p1 < 0.05) | (p2 < 0.05), y[tg], np.nan)
+        pv = np.where((p1 < 0.05), y[tg], np.nan)
+
+        ax.plot(times, mean_da_tg, color=COLORS[tg], lw=3)
+        ax.scatter(times, pv, s=3, color=COLORS[tg])
+        ax.fill_between(times, conf[0], conf[1], color=COLORS[tg], alpha=0.3)
+        ax.fill_between(times, low, upp, color=COLORS[tg], alpha=0.15, ls='--')
 
     ax.axvline(0, color='k',    linestyle='--')
-    ax.axhline(0, color='grey', linestyle=':')
-    ax.axhline(null, color='grey', linestyle=':')
     ax.spines[['right', 'top']].set_visible(False)
     ax.set_xticks([-200, 0, 200, 400, 600], [])
-    ax.set_yticks([-1, 0, 0.25, 1], [])
+    ax.set_yticks([-1, 0, 1], [])
     return fig, ax
 
 
-def plot_kinematics(epochs, subj, effector):
+def plot_kinematics(epochs, subj, effector, average=False):
     """Plot trial-averaged hand/eye velocity traces."""
 
-    colors = {2: 'teal', 3: 'darkviolet', 4: 'goldenrod'}
     vel, times, _ = compute_kinematics(epochs, subj, effector)
 
-    # Average eye velocity
-    fig = plt.figure()
-    ax = plt.gca()
-    # plt.subplots(1,3)
-    for tg in [2,3,4]:
-        avg = vel[tg].mean(axis=0)
-        # avg = vel[tg]
-        # plt.subplot(1,3,tg-1)
-        # plt.pcolormesh(times, np.arange(avg.shape[0]), avg)
-        # plt.axvline(0, color='k', linestyle='--')
-        conf = confidence_interval(vel[tg], axis=0, cis=95).squeeze()
-        ax.plot(times[T1:T2], avg[T1:T2], color=colors[tg], linewidth=3)
-        ax.fill_between(times[T1:T2], conf[0, T1:T2], conf[1, T1:T2],
-                            color=colors[tg], alpha=0.3)
+    # target_rank = epochs.metadata['Target Rank'].to_numpy()
+    # hand_reaction_times = epochs.metadata['Hand Reaction Times'].to_numpy()
+    # tg = 4
+    # mask1 = hand_reaction_times[target_rank==tg] < 0
+    # mask2 = hand_reaction_times[target_rank==tg] > 200
+    # vel_tg = vel[tg]
 
-    ax.axvline(0, color='k', linestyle='--')
-    # ax.set_xticks([-0.2, 0, 0.2, 0.4, 0.6], [])
-    ax.spines[['right', 'top']].set_visible(False)
+    # plt.figure()
+    # for i in range(10):
+    #     plt.plot(times[T1:T2], vel_tg[mask1][i,T1:T2], color='dimgrey')
+    # plt.plot(times[T1:T2], vel_tg[mask1].mean(0)[T1:T2], color='r', lw=3)
+
+    # plt.figure()
+    # for i in range(10):
+    #     plt.plot(times[T1:T2], vel_tg[mask2][i,T1:T2], color='dimgrey')
+    # plt.plot(times[T1:T2], vel_tg[mask2].mean(0)[T1:T2], color='r', lw=3)
+
+    if average:
+        fig = plt.figure()
+        ax = plt.gca()
+        for tg in [2,3,4]:
+            avg = vel[tg].mean(axis=0)
+            conf = confidence_interval(vel[tg], axis=0, cis=99).squeeze()
+            ax.plot(times[T1:T2], avg[T1:T2], color=COLORS[tg], linewidth=3)
+            ax.fill_between(times[T1:T2], conf[0, T1:T2], conf[1, T1:T2],
+                                color=COLORS[tg], alpha=0.3)
+
+        ax.axvline(0, color='k', linestyle='--')
+        ax.spines[['right', 'top']].set_visible(False)
+
+    else:
+        fig,axes = plt.subplots(1,3,sharex=True,sharey=True)
+        ax = axes.flatten()
+        for i,tg in enumerate([2,3,4]):
+            ntr = vel[tg].shape[0]
+            fig.add_subplot(1,3,i+1)
+            ax[i].pcolormesh(times, np.arange(ntr), vel[tg])
+            ax[i].axvline(0, color='k', linestyle='--')
+
     return fig, ax
 
 
@@ -317,9 +380,8 @@ def plot_distributions_across_targets(epochs, subj, effector):
         plt.vlines(inds, quartile1, quartile3, color='k', linestyle='-', lw=5)
         # plt.vlines(inds, whiskers[:,0], whiskers[:,1], color='k', linestyle='-', lw=1)
 
-        colors = ['teal','darkviolet','goldenrod']
         for i,p in enumerate(parts['bodies']):
-            p.set_facecolor(colors[i])
+            p.set_facecolor(COLORS[i+2])
         ax.set_xticks([])
         ax.spines[['right','bottom','top']].set_visible(False)
 
@@ -354,8 +416,8 @@ def plot_distributions_across_targets(epochs, subj, effector):
 if __name__ == '__main__':
 
     subj  = 'jazz'
-    onset = 'eye' # 'targ','eye' or 'hand'
-    effector = 'Eye' # 'Eye' or 'Hand'
+    onset = 'hand' # 'targ','eye' or 'hand'
+    effector = 'Hand' # 'Eye' or 'Hand'
     session_type = 'short12J' if subj == 'jazz' else 'short12E'
 
     # Load epochs of behavior
@@ -368,12 +430,14 @@ if __name__ == '__main__':
     targ_file = f'targets_xy_positions_{subj}.npy'
     targXY = np.load(os.path.join(utils.PATH, targ_file))
 
+    # Plot Figure 2A
+    # plot_trajectories(epochs, targXY) 
     # Plot Figure 2B
     # plot_initial_deviation(epochs, targXY)
     # Plot Figure 2C
     # plot_directional_alignment(epochs, targXY)
     # Plot Figure 2D
-    plot_kinematics(epochs, subj, effector)
+    plot_kinematics(epochs, subj, effector, average=False)
     # Plot Figure 2X
     # plot_distributions_across_targets(epochs, subj, effector)
     
