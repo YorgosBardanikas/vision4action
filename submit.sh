@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J batch               # Job name
+#SBATCH -J epochs               # Job name
 #SBATCH -o ./%j.out          # Name of stdout output file (%j expands to jobId)
 #SBATCH -p batch             # Name of partition
 #SBATCH -w niolon14
@@ -15,3 +15,4 @@ source activate gbpy38
 export PYTHONPATH=/envau/work/comco/bardanikas.g/Vision4Action/vision4action/analysis_scripts:$PYTHONPATH
 cd /envau/work/comco/bardanikas.g/Vision4Action/vision4action/analysis_scripts/preprocessing/
 python generate_epochs.py
+
