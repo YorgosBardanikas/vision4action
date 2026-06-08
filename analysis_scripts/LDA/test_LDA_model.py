@@ -15,10 +15,10 @@ subj = 'enya'
 onset = 'targ'
 content = 'mua'
 rgr = 'goal'
-nperms = 200
+nperms = 192
 nld = 2
 lds = [f'Ax{l+1}' for l in range(nld)]
-path = 'path_to_directory/LDA/'
+path = f'{utils.PATH}/LDA_6dirs/'
 
 ### ----- Load all the data -----
 
@@ -45,13 +45,13 @@ ch_names = epochs.ch_names
 times = epochs.times
 areas = ['7A','M1']
 
-# Exclude segments with horizontal/vertical movements because 
-# they are not repeated across targets
-codes_to_keep = [f'LS {i} Target 2' for i in [3,4,5,6,7,8,11,12]] \
-              + [f'LS {i} Target 3' for i in [1,2,9,10]] \
-              + [f'LS {i} Target 4' for i in [4,6,8,11]] \
-              + [f'LS {i} Target {j}' for i in [3,5,7,12] for j in [3,4]]
-epochs = epochs[codes_to_keep]
+# # Exclude segments with horizontal/vertical movements because 
+# # they are not repeated across targets
+# codes_to_keep = [f'LS {i} Target 2' for i in [3,4,5,6,7,8,11,12]] \
+#               + [f'LS {i} Target 3' for i in [1,2,9,10]] \
+#               + [f'LS {i} Target 4' for i in [4,6,8,11]] \
+#               + [f'LS {i} Target {j}' for i in [3,5,7,12] for j in [3,4]]
+# epochs = epochs[codes_to_keep]
 true_trials = epochs.events[:,2]
 
 
