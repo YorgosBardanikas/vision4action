@@ -12,7 +12,5 @@ module load all
 module load anaconda/3
 # moving to the working directory
 source activate gbpy38
-export PYTHONPATH=/envau/work/comco/bardanikas.g/Vision4Action/vision4action/analysis_scripts:$PYTHONPATH
-cd /envau/work/comco/bardanikas.g/Vision4Action/vision4action/analysis_scripts/preprocessing/
-python generate_epochs.py
-
+cd /envau/work/comco/bardanikas.g/Vision4Action/vision4action/analysis_scripts/mua_plots/
+python plot_mua_single_trials.py
