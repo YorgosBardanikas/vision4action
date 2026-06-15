@@ -8,14 +8,15 @@ import numpy as np
 from analysis_scripts import utils
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
-from scipy.stats import ttest_1samp, wilcoxon, sem
+from scipy.stats import ttest_1samp, wilcoxon, sem, ttest_rel
 from frites.stats.stats_nonparam import confidence_interval
 
-### ------ Time windows ------
+### ------ Global variables ------
 SFREQ = 1000          # Hz sampling rate of behavioral recordings
-T1, T2   = 320, 1220  # -300 ms to +600 ms around target onset
+T1, T2 = 320, 1220    # -300 ms to +600 ms around target onset
 HT1, HT2 = 620, 820   # 0 to 200 ms after movement onset
 COLORS = {2:'teal', 3:'darkviolet', 4:'goldenrod'}
+FIG_PATH = utils.PATH + '/Figures_revisions'
 
 
 ### ------ Helper functions ------
@@ -103,7 +104,7 @@ def compute_directional_alignment(epochs, targXY):
     ntimes = hand_xy.shape[-1]
 
     # Get the x,y positions of the visual targets in the workspace
-    targ_xy, tg_xy_shuff = get_target_xy(epochs, targXY, n_perms=100)
+    targ_xy, tg_xy_shuff = get_target_xy(epochs, targXY, n_perms=200)
     targ_xy_broadcast = np.repeat(targ_xy[..., np.newaxis], ntimes, axis=-1)
     tg_xy_shuff_broad = np.repeat(tg_xy_shuff[..., np.newaxis], ntimes, axis=-1)
 
@@ -160,7 +161,7 @@ def _compute_null(targXY):
     return null
 
 
-def compute_kinematics(epochs, subj, effector):
+def compute_kinematics(epochs, effector):
     """
     Compute smooth velocity (cm/s) of the hand or the eye (effector) per target rank.
     In case of 'Eye', discard trials where eye velocity saturated.
@@ -179,7 +180,7 @@ def compute_kinematics(epochs, subj, effector):
     if effector == 'Eye':
         # Discard full trials if the (eye) velocity is saturated even in only
         # one of the 2nd, 3rd or 4th targets.
-        sat_thres = 100*SFREQ if subj == 'jazz' else 200*SFREQ
+        sat_thres = 100*SFREQ if SUBJ == 'jazz' else 200*SFREQ
         mask = np.zeros((ntg,ntrials_per_tg), dtype=bool)
 
         for i,tg in enumerate(tgs):
@@ -219,11 +220,14 @@ def plot_trajectories(epochs, targXY):
     ev_list = [[2,9,8],[1,7,10],[3,12,9]]
     previousT_list = [[1,4,2],[1,2,4],[1,6,4]]
     currentT_list = [[4,2,6],[2,4,6],[6,4,2]]
+    fig, axes = plt.subplots(3,1)
+    ax = axes.flatten()
 
-    for ev_codes,previousT,currentT in zip(ev_list, previousT_list, currentT_list):
+    for e,(ev_codes,previousT,currentT) in enumerate(
+                                        zip(ev_list, previousT_list, currentT_list)):
 
-        plt.figure()
-        plt.axis(False)
+        fig.add_subplot(3,1,e+1)
+        ax[e].axis(False)
         utils.plot_workspace(targ_x, targ_y)
 
         for i,(ev,pre,curr) in enumerate(zip(ev_codes,previousT,currentT)):
@@ -233,11 +237,13 @@ def plot_trajectories(epochs, targXY):
             dx = current[0] - previous[0]
             dy = current[1] - previous[1]
 
-            plt.arrow(previous[0], previous[1], dx, dy, head_width=0.3, 
+            ax[e].arrow(previous[0], previous[1], dx, dy, head_width=0.3, 
                         linestyle=':', head_length=0.4, fc='k', ec='k')
             
             for hand_ in handSnglTrials_:
-                plt.plot(hand_[0,T1:T2], hand_[1,T1:T2], color=colors[i], alpha=0.06)
+                ax[e].plot(hand_[0,T1:T2], hand_[1,T1:T2], color=colors[i], alpha=0.06)
+
+    return fig, ax
 
 
 def plot_initial_deviation(epochs, targXY):
@@ -298,13 +304,15 @@ def plot_directional_alignment(epochs, targXY):
     ax.spines[['right', 'top']].set_visible(False)
     ax.set_xticks([-200, 0, 200, 400, 600], [])
     ax.set_yticks([-1, 0, 1], [])
+    fname = f'{SUBJ}_directional_alignment.svg'
+    # fig.savefig(os.path.join(FIG_PATH, fname))
     return fig, ax
 
 
-def plot_kinematics(epochs, subj, effector, average=False):
+def plot_kinematics(epochs, effector, average=False):
     """Plot trial-averaged hand/eye velocity traces."""
 
-    vel, times, _ = compute_kinematics(epochs, subj, effector)
+    vel, times, _ = compute_kinematics(epochs, effector)
 
     # target_rank = epochs.metadata['Target Rank'].to_numpy()
     # hand_reaction_times = epochs.metadata['Hand Reaction Times'].to_numpy()
@@ -348,7 +356,7 @@ def plot_kinematics(epochs, subj, effector, average=False):
     return fig, ax
 
 
-def plot_distributions_across_targets(epochs, subj, effector):
+def plot_distributions_across_targets(epochs, effector):
     """Plot the distributions of a behavioral variable across targets.
     Examples: reaction times, movement durations etc."""
 
@@ -394,6 +402,10 @@ def plot_distributions_across_targets(epochs, subj, effector):
         print(f't12:{t2} p12:{p2}')
         print(f't02:{t3} p02:{p3}')
 
+        # print(np.median(data[0]))
+        # print(np.median(data[1]))
+        # print(np.median(data[2]))
+
         return fig, ax
     
     if effector == 'Hand':
@@ -405,7 +417,7 @@ def plot_distributions_across_targets(epochs, subj, effector):
 
     elif effector == 'Eye':
         # Get the indices of the valid eye trials
-        _,_,valid = compute_kinematics(epochs, subj, effector)
+        _,_,valid = compute_kinematics(epochs, effector)
         print('   Eye Reaction Times')
         _plot_and_stats(eye_reaction_times, valid=valid)
         print('   Hand Eye Delay')
@@ -415,10 +427,11 @@ def plot_distributions_across_targets(epochs, subj, effector):
 
 if __name__ == '__main__':
 
-    subj  = 'jazz'
-    onset = 'hand' # 'targ','eye' or 'hand'
-    effector = 'Hand' # 'Eye' or 'Hand'
-    session_type = 'short12J' if subj == 'jazz' else 'short12E'
+    SUBJ  = 'jazz'
+    onset = 'eye' # 'targ','eye' or 'hand'
+    effector = 'Eye' # 'Eye' or 'Hand'
+    session_type = 'short12J' if SUBJ == 'jazz' else 'short12E'
+    plt.rcParams.update({'font.size': 14})
 
     # Load epochs of behavior
     epochList = [utils.load_epochs(session_type, onset, targetID, content='bhv')
@@ -427,7 +440,7 @@ if __name__ == '__main__':
     epochs = utils.keep_1attempt_trials(epochs, None)
 
     # Load target positions
-    targ_file = f'targets_xy_positions_{subj}.npy'
+    targ_file = f'targets_xy_positions_{SUBJ}.npy'
     targXY = np.load(os.path.join(utils.PATH, targ_file))
 
     # Plot Figure 2A
@@ -437,8 +450,8 @@ if __name__ == '__main__':
     # Plot Figure 2C
     # plot_directional_alignment(epochs, targXY)
     # Plot Figure 2D
-    plot_kinematics(epochs, subj, effector, average=False)
+    # plot_kinematics(epochs, effector, average=False)
     # Plot Figure 2X
-    # plot_distributions_across_targets(epochs, subj, effector)
+    plot_distributions_across_targets(epochs, effector)
     
     plt.show()
