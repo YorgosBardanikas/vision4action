@@ -1,4 +1,5 @@
 
+import os
 import numpy as np
 import xarray as xr
 from analysis_scripts import utils
@@ -9,6 +10,7 @@ subj = 'jazz'
 onset = 'targ'
 content = 'mua'
 rgr = 'goal'
+shuffles = False
 areas = ['M1','7A']
 plt.rcParams.update({'font.size': 14})
 path = f'{utils.v4a_dir}/LDA_2d/'
@@ -16,16 +18,17 @@ v = 0.35 if subj == 'jazz' else 0.4
 
 # Load the center out data 80/20
 filename = f'{subj}-{onset}-{content}_LDA_predictions_{rgr}8020.nc'
-lda_predictions_cout = xr.open_dataarray(f'{path}{filename}',engine='h5netcdf')
+lda_predictions_cout = xr.open_dataarray(os.path.join(path, filename), engine='h5netcdf')
 
 # Load the 3rd/4th peripheral targets
 filename = f'{subj}-{onset}-{content}_LDA_LS{rgr}.nc'
-lda = xr.open_dataset(f'{path}{filename}',engine='h5netcdf')
+lda = xr.open_dataset(os.path.join(path, filename), engine='h5netcdf')
 lda_predictions = lda['predictions']
 
-# Load the permutations of all targets
-filename = f'{subj}-{onset}-{content}_LDA_LS{rgr}_shuffled.nc'
-# shuffled_predictions = xr.open_dataarray(f'{path}{filename}',engine='h5netcdf')
+if shuffles:
+    # Load the permutations of all targets
+    filename = f'{subj}-{onset}-{content}_LDA_LS{rgr}_shuffled.nc'
+    shuffled_predictions = xr.open_dataarray(os.path.join(path, filename), engine='h5netcdf')
 
 true_trials = lda_predictions.true_trials
 times = lda_predictions.times*1000
@@ -43,7 +46,7 @@ for a,area in enumerate(areas):
 
     lda_2 = lda_predictions_cout.sel(areas=area)
     lda_34 = lda_predictions.sel(areas=area)
-    # lda_34_shuf = shuffled_predictions.sel(areas=area)
+    if shuffles: lda_34_shuf = shuffled_predictions.sel(areas=area)
 
     true_trials_2 = lda_2.trials.data[:,None]
     accuracies = (lda_2.data == true_trials_2).mean(axis=0)
@@ -60,7 +63,7 @@ for a,area in enumerate(areas):
         test_inds = np.where(np.isin(true_trials, remap_flat))[0]
         true_trials_ = true_trials[test_inds].data
         lda_predictions_ = lda_34.isel(trials=test_inds).data
-        # shuffled_predictions_ = lda_34_shuf.isel(trials=test_inds).data
+        if shuffles: shuffled_predictions_ = lda_34_shuf.isel(trials=test_inds).data
 
         for ind, rm in zip(train_inds, remap):
             true_trials_ = np.where(np.isin(true_trials_, rm), ind, true_trials_)
@@ -69,17 +72,22 @@ for a,area in enumerate(areas):
         accuracies = (lda_predictions_ == true_trials_34).mean(axis=0)
         accuracies = savgol_filter(accuracies,81,1)
         true_trials_34_s = true_trials_[None,:,None]
-        # accuracies_shuffled = (shuffled_predictions_ == true_trials_34_s).mean(axis=1)
-        # accuracies_shuffled = savgol_filter(accuracies_shuffled,81,1)
-        # l,u = np.percentile(accuracies_shuffled, [1,99], axis=0)
 
-        if i!=0: plt.plot(times[t1:t2], accuracies[t1:t2], color=clrs[i], lw=3)
-        # plt.fill_between(times[t1:t2], l[t1:t2], y2=u[t1:t2], 
-                                        # color=clrs[i], alpha=0.15)
+        if shuffles:
+            accuracies_shuffled = (shuffled_predictions_ == true_trials_34_s).mean(axis=1)
+            accuracies_shuffled = savgol_filter(accuracies_shuffled,81,1)
+            l,u = np.percentile(accuracies_shuffled, [1,99], axis=0)
+
+        if i!=0: 
+            plt.plot(times[t1:t2], accuracies[t1:t2], color=clrs[i], lw=3)
+        if shuffles:
+            plt.fill_between(times[t1:t2], l[t1:t2], y2=u[t1:t2], 
+                                        color=clrs[i], alpha=0.15)
 
     plt.xticks([-200,0,200,400,600],[])
     plt.yticks([0.25,v],[])
 
 # fig_dir = f'{utils.v4a_dir}/Figures/'
-# plt.savefig(f'{fig_dir}{subj}-LDA_accuracy_new.svg')
+# fig_name = f'{subj}-LDA_accuracy_new.svg'
+# plt.savefig(os.path.join(fig_dir, fig_name))
 plt.show()
