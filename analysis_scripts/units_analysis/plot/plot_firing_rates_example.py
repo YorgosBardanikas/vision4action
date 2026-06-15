@@ -12,6 +12,7 @@ subj = 'jazz'
 onset = 'targ'
 content = 'units'
 session = 'j210215-land-003'
+# session = 'j210216-land-001'
 v4a_dir = f'{utils.PATH}/{session}'
 path = f'{utils.PATH}/LDA_spikes/'
 pmd_rates_all = []
@@ -21,8 +22,8 @@ best_units = []
 n = 30 # amount of neurons with largest mean firing rate to keep
 plt.rcParams.update({'font.size': 14})
 t1,t2 = 400,1300
-colors = ['#7aaacf','#9e9896','#e8c166','#ba805b']
-clrs = ['teal','darkviolet','goldenrod']
+# colors = ['#7aaacf','#9e9896','#e8c166','#ba805b']
+colors = ["#5245de","#a5bcda","#ec90b0","#c22d3f"]
 
 for t in [2,3,4]:
 
@@ -31,7 +32,7 @@ for t in [2,3,4]:
 
     pmd_idx = firing_rates.units.str.contains('M1-PMd')
     pmd_rates = firing_rates.sel(units=pmd_idx)
-    pmd_rates = xr.apply_ufunc(uniform_filter1d, pmd_rates, kwargs={'size':50, 'axis':-1})
+    pmd_rates = xr.apply_ufunc(uniform_filter1d, pmd_rates, kwargs={'size':100, 'axis':-1})
 
     mean_frate = pmd_rates.var(('trials','times'))
     idx = np.argsort(mean_frate)[::-1][:n] 
@@ -69,9 +70,12 @@ ntimes = times.size
 #             plt.plot(times[t1:t2], unit_rate_dr[t1:t2], color=colors[i])
 #             plt.title(u_id)
 
-unit_id = 24
-pmd_xmpl = [xmpl.isel(units=unit_id) for xmpl in pmd_rates_common]
-plt.subplots(1,3,sharex=True,sharey=True)
+
+# unit_name = 'M1-PMd_40001'
+unit_name = 'M1-PMd_89001'
+unit_name = 'M1-PMd_92002'
+pmd_xmpl = [xmpl.sel(units=unit_name) for xmpl in pmd_rates_common]
+plt.subplots(3,1,sharex=True,sharey=True,figsize=(6,9))
 
 for tg,pmd_xmpl_tg in enumerate(pmd_xmpl):
 
@@ -83,7 +87,7 @@ for tg,pmd_xmpl_tg in enumerate(pmd_xmpl):
     if tg==0: dirs_tg = [2,3,4,6]
     else: dirs_tg = [[11,15],[9,16],[7,18],[8,13]]
 
-    plt.subplot(1,3,tg+1)
+    plt.subplot(3,1,tg+1)
     plt.axvline(0, color='k', ls='--')
     plt.gca().spines[['right','top']].set_visible(False)
 
@@ -96,4 +100,10 @@ for tg,pmd_xmpl_tg in enumerate(pmd_xmpl):
         plt.plot(times[t1:t2], drct_mean[t1:t2], color=colors[i])
         plt.fill_between(times[t1:t2], l[t1:t2], u[t1:t2], color=colors[i], alpha=0.2)
 
+    plt.yticks([0,0.04],[])
+    plt.ylim([None,0.055])
+
+# fig_dir = f'{utils.PATH}/Figures_revisions/SUA'
+# fig_name = f'firing_rate_{session}_unit_{unit_name}.svg'
+# plt.savefig(os.path.join(fig_dir, fig_name)), plt.close()
 plt.show()
