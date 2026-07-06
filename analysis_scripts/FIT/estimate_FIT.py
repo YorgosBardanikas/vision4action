@@ -95,7 +95,7 @@ if __name__ == '__main__':
     fit_perms = xr.concat(fit_perms_group, dim='groups')
 
     # Save the data
-    path = 'path_to_directory/FIT/'
+    path = f'{utils.PATH}/FIT/'
     fit_filename = f'{subj}-{onset}-{content}-FIT.nc'
     fit.to_netcdf(os.path.join(path, fit_filename),engine='h5netcdf')
     # save permutations in ndarrays to avoid duplicating metadata in the fit xarray.DataArray
