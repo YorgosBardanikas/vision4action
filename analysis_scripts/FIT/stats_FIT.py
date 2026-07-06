@@ -1,31 +1,34 @@
-"""Script to compute the significant clusters of FIT.
+"""Script to compute the significant clusters of FIT or MI.
 WfStats workflow is used from 
 https://github.com/brainets/frites/tree/master/frites/workflow"""
 
 import os
 import xarray as xr
 import numpy as np
+from analysis_scripts import utils
 from frites.workflow import WfStats
 from scipy.signal import savgol_filter
 
-# Load the true FIT and its permutations
-subj = 'jazz'
+# Load the true FIT/MI and its permutations
+subj = 'enya'
 onset = 'targ'
 content = 'mua'
-path = '/path_to_directory/FIT/'
-fit_filename = f'{subj}-{onset}-{content}-FIT.nc'
+variable = 'MI'
+path = f'{utils.PATH}/{variable}/'
+fit_filename = f'{subj}-{onset}-{content}-{variable}.nc'
 fit = xr.open_dataarray(os.path.join(path, fit_filename),engine='h5netcdf')
 roi = fit.roi.data.tolist()
 times = fit.times.data
 fit = savgol_filter(fit.data,3,1)
-perms_filename = f'{subj}-{onset}-{content}-FIT_perms.npy'
+perms_filename = f'{subj}-{onset}-{content}-{variable}_perms.npy'
 fit_perms = np.load(os.path.join(path, perms_filename))
 fit_perms = savgol_filter(fit_perms,3,1)
 
 # Perform cluster-based statistics
 pvs = []
 for fit_, fit_perms_ in zip(fit, fit_perms):
-    fit_perms_ = fit_perms_.transpose(1,0,2) # (roi,perms,times)
+    if variable == 'FIT':
+        fit_perms_ = fit_perms_.transpose(1,0,2) # (roi,perms,times)
     fit_stats = [item[np.newaxis,:] for item in fit_]
     fitp_stats = [item[:,np.newaxis,:] for item in fit_perms_]
 
@@ -35,5 +38,5 @@ for fit_, fit_perms_ in zip(fit, fit_perms):
 pv_all = xr.concat(pvs, dim='groups')
 
 # Save the p-values
-pv_filename = f'{subj}-{onset}-{content}-FIT_pv.nc'
+pv_filename = f'{subj}-{onset}-{content}-{variable}_pv.nc'
 pv_all.to_netcdf(os.path.join(path, pv_filename),engine='h5netcdf')
