@@ -11,10 +11,14 @@ import numpy as np
 from frites.io import logger
 from mne.filter import filter_data
 from scipy.signal import decimate
+from analysis_scripts.utils import load_session_group
 
+SUBJ = 'jazz'
 parent_dir = 'parent_directory'
 path_to_save = 'path_to_save'
-session_group = ['all_session_names']
+session_type = 'short12J' if SUBJ == 'jazz' else 'short12E'
+session_group = load_session_group(session_type)
+
 for session in session_group:
     MUAe = {}
     for implant_site in ['visual','motor']:
@@ -38,8 +42,7 @@ for session in session_group:
             else: m,n = int(2*analogSignal.shape[0]/3), None
             rawData = np.array(analogSignal, dtype=float)[m:n]
             # High-pass filter the raw data
-            lfreq, hfreq = 500, 6000 # Hz
-            # lfreq, hfreq = 1,500 # Hz
+            lfreq, hfreq = 600, 6000 # Hz
             dataHighPass = filter_data(rawData, sfreq, lfreq, hfreq, method='iir',verbose='ERROR')
             del rawData
             # Z-score the high-pass data
