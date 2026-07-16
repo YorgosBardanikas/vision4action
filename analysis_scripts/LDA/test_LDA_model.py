@@ -11,14 +11,14 @@ import xarray as xr
 from analysis_scripts import utils
 
 # Parameters setting
-subj = 'enya'
+subj = 'jazz'
 onset = 'targ'
 content = 'mua'
 rgr = 'goal'
 nperms = 192
 nld = 2
 lds = [f'Ax{l+1}' for l in range(nld)]
-path = f'{utils.PATH}/LDA_6dirs/'
+path = f'{utils.PATH}/LDA_2d/'
 
 ### ----- Load all the data -----
 
@@ -53,6 +53,10 @@ areas = ['7A','M1']
 #               + [f'LS {i} Target {j}' for i in [3,5,7,12] for j in [3,4]]
 # epochs = epochs[codes_to_keep]
 true_trials = epochs.events[:,2]
+
+# # Load the reaction times to save them in the xarrays
+# epochs_bhv = epochs_bhv[codes_to_keep]
+hand_reaction_times = epochs_bhv.metadata['Hand Reaction Times'].to_numpy()
 
 
 ### ----- Test the LDA models (real and shuffled) -----
@@ -89,10 +93,11 @@ lda_projections = xr.DataArray(np.array(projections), dims=['areas','PCs','trial
                                     coords=[areas, lds, trial_counts, times])
 lda_predictions = xr.DataArray(np.array(predictions), dims=['areas','trials','times'],
                                                     coords=[areas, trial_counts, times])
-lda_predictions = lda_predictions.assign_coords(true_trials=('trials',true_trials))
+lda_predictions = lda_predictions.assign_coords(true_trials=('trials',true_trials),
+                                                reaction_times=('trials',hand_reaction_times))
 
 lda_set = xr.Dataset({'projections':lda_projections, 'predictions':lda_predictions})
-filename1 = f'{subj}-{onset}-{content}_LDA_LS{rgr}.nc'
+filename1 = f'{subj}-{onset}-{content}_LDA_LS{rgr}_rt.nc'
 lda_set.to_netcdf(os.path.join(path, filename1), engine='h5netcdf')
 
 # The shuffled predictions
