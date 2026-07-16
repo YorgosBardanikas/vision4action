@@ -13,7 +13,7 @@ rgr = 'goal'
 shuffles = False
 areas = ['M1','7A']
 plt.rcParams.update({'font.size': 14})
-path = f'{utils.v4a_dir}/LDA_2d/'
+path = f'{utils.PATH}/LDA_2d/'
 v = 0.35 if subj == 'jazz' else 0.4
 
 # Load the center out data 80/20
@@ -36,7 +36,7 @@ t1,t2 = 400,1400
 clrs = ['teal','darkviolet','goldenrod']
 
 # Map true labels to test labels (same as train)
-train_inds = [1,2,3,4,5,6]
+train_inds = [2,3,4,6]
 remap2 = [[32,42],[52,62],[72,82],[112,122]]
 remap3 = [[53,93],[33,103],[13,123],[23,73]]
 remap4 = [[44,124],[64,74],[54,84],[34,114]]
@@ -73,14 +73,13 @@ for a,area in enumerate(areas):
         accuracies = savgol_filter(accuracies,81,1)
         true_trials_34_s = true_trials_[None,:,None]
 
+        if i!=0: 
+            plt.plot(times[t1:t2], accuracies[t1:t2], color=clrs[i], lw=3)
+
         if shuffles:
             accuracies_shuffled = (shuffled_predictions_ == true_trials_34_s).mean(axis=1)
             accuracies_shuffled = savgol_filter(accuracies_shuffled,81,1)
             l,u = np.percentile(accuracies_shuffled, [1,99], axis=0)
-
-        if i!=0: 
-            plt.plot(times[t1:t2], accuracies[t1:t2], color=clrs[i], lw=3)
-        if shuffles:
             plt.fill_between(times[t1:t2], l[t1:t2], y2=u[t1:t2], 
                                         color=clrs[i], alpha=0.15)
 
