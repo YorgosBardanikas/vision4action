@@ -1,5 +1,5 @@
 """Script that loads the behavioral data, performs the behavioral analyses,
-and plots all panels of Figure 2.
+and plots all panels of Figure 2 and Figure S.2.
 """
 
 import os
@@ -15,6 +15,7 @@ from frites.stats.stats_nonparam import confidence_interval
 SFREQ = 1000          # Hz sampling rate of behavioral recordings
 T1, T2 = 320, 1220    # -300 ms to +600 ms around target onset
 HT1, HT2 = 620, 820   # 0 to 200 ms after movement onset
+ET1, ET2 = 590, 700   # -30 to 80 ms around eye onset
 COLORS = {2:'teal', 3:'darkviolet', 4:'goldenrod'}
 FIG_PATH = utils.PATH + '/Figures_revisions'
 
@@ -202,7 +203,7 @@ def compute_kinematics(epochs, effector):
 ### ------ Plotting functions ------
 
 def plot_trajectories(epochs, targXY):
-    """Plot example trajectories (Figure 2A)."""
+    """Plot example trajectories."""
 
     colors = list(COLORS.values())
     events = utils.group_events(epochs.events[:,2],'motor')[0]
@@ -247,7 +248,7 @@ def plot_trajectories(epochs, targXY):
 
 
 def plot_initial_deviation(epochs, targXY):
-    """Plot cumulative distribution of initial deviation (Figure 2B)."""
+    """Plot cumulative distribution of initial deviation."""
 
     initial_deviation = compute_initial_deviation(epochs, targXY)
 
@@ -310,7 +311,7 @@ def plot_directional_alignment(epochs, targXY):
 
 
 def plot_kinematics(epochs, effector, average=False):
-    """Plot trial-averaged hand/eye velocity traces."""
+    """Plot trial-averaged or single-trial hand/eye velocity traces."""
 
     vel, times, _ = compute_kinematics(epochs, effector)
 
@@ -336,13 +337,17 @@ def plot_kinematics(epochs, effector, average=False):
         ax = plt.gca()
         for tg in [2,3,4]:
             avg = vel[tg].mean(axis=0)
+            st = vel[tg].std(axis=0, ddof=1)
+            l, u = avg - st/2 , avg + st/2
             conf = confidence_interval(vel[tg], axis=0, cis=99).squeeze()
-            ax.plot(times[T1:T2], avg[T1:T2], color=COLORS[tg], linewidth=3)
-            ax.fill_between(times[T1:T2], conf[0, T1:T2], conf[1, T1:T2],
+            l, u = conf
+            ax.plot(times[ET1:ET2], avg[ET1:ET2], color=COLORS[tg], linewidth=3)
+            ax.fill_between(times[ET1:ET2], l[ET1:ET2], u[ET1:ET2],
                                 color=COLORS[tg], alpha=0.3)
 
         ax.axvline(0, color='k', linestyle='--')
         ax.spines[['right', 'top']].set_visible(False)
+        ax.set_xticks([0, 0.05], ['0','50'])
 
     else:
         fig,axes = plt.subplots(1,3,sharex=True,sharey=True)
@@ -367,6 +372,13 @@ def plot_distributions_across_targets(epochs, effector):
     segment_duration = epochs.metadata['Segment Duration'].to_numpy()
     hand_eye_delay = epochs.metadata['Hand-Eye Delay'].to_numpy()
     movement_duration = segment_duration - hand_reaction_times
+
+    for tg in [3,4]:
+        print(f'Target {tg} trials above 150 ms')
+        total_ntrials = hand_reaction_times[target_rank == tg].size
+        ntrials_above_150ms = np.where(hand_reaction_times[target_rank == tg] > 150)[0].size
+        prcnt_above_150ms = np.round(100*ntrials_above_150ms/total_ntrials, 1)
+        print(f'{ntrials_above_150ms} out of {total_ntrials}, {prcnt_above_150ms}%')
 
     def _plot_and_stats(beh, valid=None):
         """Plot the distributions and print the statistics."""
@@ -428,8 +440,8 @@ def plot_distributions_across_targets(epochs, effector):
 if __name__ == '__main__':
 
     SUBJ  = 'jazz'
-    onset = 'eye' # 'targ','eye' or 'hand'
-    effector = 'Eye' # 'Eye' or 'Hand'
+    onset = 'hand' # 'targ','eye' or 'hand'
+    effector = 'Hand' # 'Eye' or 'Hand'
     session_type = 'short12J' if SUBJ == 'jazz' else 'short12E'
     plt.rcParams.update({'font.size': 14})
 
@@ -443,15 +455,10 @@ if __name__ == '__main__':
     targ_file = f'targets_xy_positions_{SUBJ}.npy'
     targXY = np.load(os.path.join(utils.PATH, targ_file))
 
-    # Plot Figure 2A
     # plot_trajectories(epochs, targXY) 
-    # Plot Figure 2B
     # plot_initial_deviation(epochs, targXY)
-    # Plot Figure 2C
     # plot_directional_alignment(epochs, targXY)
-    # Plot Figure 2D
-    # plot_kinematics(epochs, effector, average=False)
-    # Plot Figure 2X
+    # plot_kinematics(epochs, effector, average=True)
     plot_distributions_across_targets(epochs, effector)
     
     plt.show()
