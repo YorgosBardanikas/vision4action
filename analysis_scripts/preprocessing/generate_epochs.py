@@ -162,18 +162,18 @@ def _detect_hand_onsets(hand_x, hand_y, target_onsets, target_reached, targetID)
         else: 
             trough_idx = local_min_idxs[-1]
 
-        # In case that the last local minimum is larger than 50% of the peak
+        # In case that the last local minimum is larger than 30% of the peak
         # which means that is not a real minimum (there is hand velocity before)
         # select the second to last minimum. Continue until you find a minimum
         # that satisfies the condition.
         counter = -2
         while v[trough_idx] > 0.3 * v[peak_idx]:
-            counter -= 1
             try:
                 trough_idx = local_min_idxs[counter]
             except IndexError: 
                 trough_idx = np.argmin(v_prepeak)
                 break
+            counter -= 1
 
         # Find all points below a velocity threshold between trough and peak
         v_search = v[trough_idx:peak_idx]
@@ -411,7 +411,7 @@ def _create_spike_epochs(neuralSignal, trial_data, event_onsets, w1, w2,
     """
     Build and save Gaussian-convolved firing rate epochs from spike trains.
     """
-    sorters = ['Fred','Alexa','Thomas']
+
     min_spike_count = 100 # minimum spike count for a neuron to be considered
     spike_trains_areas = {}
     units_id, units_type = [],[]
@@ -421,7 +421,7 @@ def _create_spike_epochs(neuralSignal, trial_data, event_onsets, w1, w2,
         sp_times = segment.spiketrains._items
         # valid_trains = [s for s in sp_times 
         #                 if len(s) > min_spike_count and
-        #                 s.annotations['sorter'] in sorters and
+        #                 s.annotations['sorter'] in ['Fred','Alexa'] and
         #                 s.annotations['unit_type'] != 'noise']
         valid_trains = [s for s in sp_times 
                         if len(s) > min_spike_count]
@@ -606,13 +606,14 @@ def generate_epoch_files(neuralSignal, segBehavior, block, session_name,
 
 if __name__ == '__main__':
 
-    epoch_content = 'mua'
+    epoch_content = 'units'
 
     for session_type in ['short12J','short12E']:
 
         session_group = utils.load_session_group(session_type)
 
         for session in session_group:
+            # session = 'j210215-land-003'
 
             v4a_dir = f'{utils.PATH}/{session}'
 
@@ -659,6 +660,6 @@ if __name__ == '__main__':
             segBehavior = segments['visual']
 
             for targetID in [2,3,4]: # target 1 corresponds to initial central target of trial initiation
-                for onset in ['hand']:
+                for onset in ['targ']:
                     generate_epoch_files(neuralSignal, segBehavior, block, session, 
                                             onset, epoch_content, targetID, v4a_dir)
