@@ -17,7 +17,7 @@ path = f'{utils.PATH}/MI/'
 filename = f'{subj}-{onset}-{content}-MI_pv.nc'
 pv = xr.open_dataarray(os.path.join(path,filename), engine='h5netcdf')
 roi = pv.roi.data
-window_size = 10 # x5 ms
+window_size = 20 # x5 ms
 pv_binary = np.where(pv < 0.05, 1, 0)
 
 for i,pv_group in enumerate(pv_binary):
