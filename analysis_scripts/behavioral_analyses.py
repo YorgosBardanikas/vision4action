@@ -455,10 +455,10 @@ if __name__ == '__main__':
     targ_file = f'targets_xy_positions_{SUBJ}.npy'
     targXY = np.load(os.path.join(utils.PATH, targ_file))
 
-    plot_trajectories(epochs, targXY)
+    # plot_trajectories(epochs, targXY)
     # plot_initial_deviation(epochs, targXY)
     # plot_directional_alignment(epochs, targXY)
     # plot_kinematics(epochs, effector, average=True)
-    # plot_distributions_across_targets(epochs, effector)
+    plot_distributions_across_targets(epochs, effector)
     
     plt.show()
