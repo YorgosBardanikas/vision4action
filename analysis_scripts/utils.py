@@ -7,7 +7,7 @@ import mne
 import numpy as np
 from frites.io import logger
 import matplotlib.pyplot as plt
-from matplotlib.patches import Ellipse
+from matplotlib.patches import Circle, Ellipse
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from matplotlib.colors import LinearSegmentedColormap
 
@@ -280,20 +280,21 @@ def fit_lda(epochs, classes, seed):
 
 
 
-def plot_workspace(xTarg, yTarg):
+def plot_workspace(xTarg, yTarg, ax):
 
     # xTarg = xTarg - xTarg[0]
     # yTarg = yTarg - yTarg[0]
-    clrs = ['k'] * xTarg.size
     
-    for i, (x,y) in enumerate(zip(xTarg, yTarg)):
-        plt.scatter(x, y, s=30, color=clrs[i])
+    for x, y in zip(xTarg, yTarg):
+
         center = (x, y)
         width, height = 2, 2
-        ellipse = Ellipse(center, width, height, linestyle='dashed',
-                        linewidth=1, color=clrs[i], fill=False)
-        plt.gca().add_patch(ellipse)
-        plt.gca().set_aspect('equal', adjustable='box')
+        target = Circle(center, radius=0.325, color='k')
+        valid_target_area = Ellipse(center, width, height, linestyle='dashed',
+                                    linewidth=1, color='k', fill=False)
+        ax.add_patch(target)
+        ax.add_patch(valid_target_area)
+        ax.set_aspect('equal', adjustable='box')
 
 
 
