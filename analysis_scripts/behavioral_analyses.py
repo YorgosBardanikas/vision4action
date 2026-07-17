@@ -227,9 +227,8 @@ def plot_trajectories(epochs, targXY):
     for e,(ev_codes,previousT,currentT) in enumerate(
                                         zip(ev_list, previousT_list, currentT_list)):
 
-        fig.add_subplot(3,1,e+1)
         ax[e].axis(False)
-        utils.plot_workspace(targ_x, targ_y)
+        utils.plot_workspace(targ_x, targ_y, ax[e])
 
         for i,(ev,pre,curr) in enumerate(zip(ev_codes,previousT,currentT)):
 
@@ -242,7 +241,7 @@ def plot_trajectories(epochs, targXY):
                         linestyle=':', head_length=0.4, fc='k', ec='k')
             
             for hand_ in handSnglTrials_:
-                ax[e].plot(hand_[0,T1:T2], hand_[1,T1:T2], color=colors[i], alpha=0.06)
+                ax[e].plot(hand_[0,T1+300:T2], hand_[1,T1+300:T2], color=colors[i], alpha=0.06)
 
     return fig, ax
 
@@ -293,6 +292,7 @@ def plot_directional_alignment(epochs, targXY):
 
         p1 = ttest_1samp(da_tg, upp, axis=0, alternative='greater')[1]
         p2 = ttest_1samp(da_tg, low, axis=0, alternative='less')[1]
+        p1, p2 = p1*times.size, p2*times.size # bonferroni correction for multiple comparisons
         pv = np.where((p1 < 0.05) | (p2 < 0.05), y[tg], np.nan)
         pv = np.where((p1 < 0.05), y[tg], np.nan)
 
@@ -440,7 +440,7 @@ def plot_distributions_across_targets(epochs, effector):
 if __name__ == '__main__':
 
     SUBJ  = 'jazz'
-    onset = 'hand' # 'targ','eye' or 'hand'
+    onset = 'targ' # 'targ','eye' or 'hand'
     effector = 'Hand' # 'Eye' or 'Hand'
     session_type = 'short12J' if SUBJ == 'jazz' else 'short12E'
     plt.rcParams.update({'font.size': 14})
@@ -455,10 +455,10 @@ if __name__ == '__main__':
     targ_file = f'targets_xy_positions_{SUBJ}.npy'
     targXY = np.load(os.path.join(utils.PATH, targ_file))
 
-    # plot_trajectories(epochs, targXY) 
+    plot_trajectories(epochs, targXY)
     # plot_initial_deviation(epochs, targXY)
     # plot_directional_alignment(epochs, targXY)
     # plot_kinematics(epochs, effector, average=True)
-    plot_distributions_across_targets(epochs, effector)
+    # plot_distributions_across_targets(epochs, effector)
     
     plt.show()
