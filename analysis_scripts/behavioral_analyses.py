@@ -11,11 +11,13 @@ from scipy.signal import savgol_filter
 from scipy.stats import ttest_1samp, wilcoxon, sem, ttest_rel
 from frites.stats.stats_nonparam import confidence_interval
 
+
 ### ------ Global variables ------
 SFREQ = 1000          # Hz sampling rate of behavioral recordings
 T1, T2 = 320, 1220    # -300 ms to +600 ms around target onset
 HT1, HT2 = 620, 820   # 0 to 200 ms after movement onset
 ET1, ET2 = 590, 700   # -30 to 80 ms around eye onset
+TARGS = [2,3,4]
 COLORS = {2:'teal', 3:'darkviolet', 4:'goldenrod'}
 FIG_PATH = utils.PATH + '/Figures_revisions'
 
@@ -169,8 +171,7 @@ def compute_kinematics(epochs, effector):
     Returns dict {target_rank: (ntrials, ntimes)}, epochs.times and the mask
     of valid trial indices after discarding saturated trials.
     """
-    tgs = [2,3,4]
-    ntg = len(tgs)
+    ntg = len(TARGS)
     ntrials_per_tg = len(epochs)//ntg
     target_rank = epochs.metadata['Target Rank'].to_numpy()
     w_filt = 11 if effector == 'Eye' else 101
@@ -184,7 +185,7 @@ def compute_kinematics(epochs, effector):
         sat_thres = 100*SFREQ if SUBJ == 'jazz' else 200*SFREQ
         mask = np.zeros((ntg,ntrials_per_tg), dtype=bool)
 
-        for i,tg in enumerate(tgs):
+        for i,tg in enumerate(TARGS):
             # sum the velocity across time
             sums = vel_filt[target_rank==tg].sum(-1)
             # keep only the indexes that are smalled than a saturation threshold
@@ -279,7 +280,7 @@ def plot_directional_alignment(epochs, targXY):
 
     fig = plt.figure()
     ax = plt.gca()
-    for tg in [2,3,4]:
+    for tg in TARGS:
 
         da_tg = dir_al[target_rank==tg]
         mean_da_tg = da_tg.mean(axis=0)
@@ -335,7 +336,7 @@ def plot_kinematics(epochs, effector, average=False):
     if average:
         fig = plt.figure()
         ax = plt.gca()
-        for tg in [2,3,4]:
+        for tg in TARGS:
             avg = vel[tg].mean(axis=0)
             st = vel[tg].std(axis=0, ddof=1)
             l, u = avg - st/2 , avg + st/2
@@ -352,7 +353,7 @@ def plot_kinematics(epochs, effector, average=False):
     else:
         fig,axes = plt.subplots(1,3,sharex=True,sharey=True)
         ax = axes.flatten()
-        for i,tg in enumerate([2,3,4]):
+        for i,tg in enumerate(TARGS):
             ntr = vel[tg].shape[0]
             fig.add_subplot(1,3,i+1)
             ax[i].pcolormesh(times, np.arange(ntr), vel[tg])
@@ -373,20 +374,32 @@ def plot_distributions_across_targets(epochs, effector):
     hand_eye_delay = epochs.metadata['Hand-Eye Delay'].to_numpy()
     movement_duration = segment_duration - hand_reaction_times
 
-    for tg in [3,4]:
-        print(f'Target {tg} trials above 150 ms')
-        total_ntrials = hand_reaction_times[target_rank == tg].size
-        ntrials_above_150ms = np.where(hand_reaction_times[target_rank == tg] > 150)[0].size
-        prcnt_above_150ms = np.round(100*ntrials_above_150ms/total_ntrials, 1)
-        print(f'{ntrials_above_150ms} out of {total_ntrials}, {prcnt_above_150ms}%')
+    if SUBJ == 'jazz':
+        threshold = np.greater
+        txt = 'above'
+    elif SUBJ == 'enya':
+        threshold = np.less
+        txt = 'below'
+    rt_thres = 150
 
+    for tg in [3,4]:
+        reaction_times_tg = hand_reaction_times[target_rank == tg]
+
+        n_total = reaction_times_tg.size
+        n_selected = threshold(reaction_times_tg, rt_thres).sum()
+        percentage = np.round(100*n_selected/n_total, 1)
+
+        print(f'Target {tg} trials {txt} {rt_thres} ms')
+        print(f'{n_selected} out of {n_total}, {percentage}%')
+
+        
     def _plot_and_stats(beh, valid=None):
         """Plot the distributions and print the statistics."""
 
         if valid is not None: 
-            data = [beh[target_rank == tg][valid] for tg in [2,3,4]]
+            data = [beh[target_rank == tg][valid] for tg in TARGS]
         else: 
-            data = [beh[target_rank == tg] for tg in [2,3,4]]
+            data = [beh[target_rank == tg] for tg in TARGS]
 
         fig = plt.figure()
         ax = plt.gca()
@@ -439,7 +452,7 @@ def plot_distributions_across_targets(epochs, effector):
 
 if __name__ == '__main__':
 
-    SUBJ  = 'jazz'
+    SUBJ  = 'enya'
     onset = 'targ' # 'targ','eye' or 'hand'
     effector = 'Hand' # 'Eye' or 'Hand'
     session_type = 'short12J' if SUBJ == 'jazz' else 'short12E'
@@ -447,7 +460,7 @@ if __name__ == '__main__':
 
     # Load epochs of behavior
     epochList = [utils.load_epochs(session_type, onset, targetID, content='bhv')
-                 for targetID in [2,3,4]]
+                 for targetID in TARGS]
     epochs = mne.concatenate_epochs(epochList, on_mismatch='ignore')
     epochs = utils.keep_1attempt_trials(epochs, None)
 
