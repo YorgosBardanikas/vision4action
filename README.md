@@ -2,7 +2,7 @@
 
 [![DOI](https://img.shields.io/badge/DOI-10.64898%2F2026.03.03.709252-blue.svg)](https://doi.org/10.64898/2026.03.03.709252)
 
-`vision4action` is the analysis code accompanying the study **"Reciprocal Fronto-Parietal Interactions Support Motor Anticipation during Sequential Reaching"** (Bardanikas et al., 2026). The repository contains the Python pipeline used to process behavioral (hand/eye tracking) and electrophysiological (multi-unit activity) recordings from macaque monkeys performing a visually-guided sequential reaching task, and to quantify fronto-parietal interactions during motor anticipation.
+`vision4action` is the analysis code accompanying the study **"Reciprocal Fronto-Parietal Interactions Support Distinct Motor Strategies during Sequential Reaching"** (Bardanikas et al., 2026). The repository contains the Python pipeline used to process behavioral (hand/eye tracking) and electrophysiological (multi-unit activity) recordings from macaque monkeys performing a visually-guided sequential reaching task, and to quantify fronto-parietal interactions during motor anticipation.
 
 - [Overview](#overview)
 - [Paper / Citation](#paper--citation)
@@ -16,7 +16,7 @@
 This repository holds the analysis scripts used to:
 
 - Quantify **behavioral anticipation** from hand and eye trajectories as target predictability increases (cosine similarity, angular deviation, eye velocity).
-- Compute **multi-unit activity (MUA)** envelopes from raw extracellular recordings in PMd/M1 and area 7A.
+- Compute **single-unit activity (SUA)** and **multi-unit activity (MUA)** envelopes from raw extracellular recordings in PMd/M1 and area 7A.
 - Decode movement direction from population activity using **Linear Discriminant Analysis (LDA)** to track when preparatory neural representations emerge relative to target onset.
 - Quantify directed, feature-specific **inter-areal information transfer** between PMd/M1 and 7A using **Feature-specific Information Transfer (FIT)**.
 - Assess shared representational geometry between areas with **Canonical Correlation Analysis (CCA)**.
@@ -24,7 +24,7 @@ This repository holds the analysis scripts used to:
 
 # Paper / Citation
 
-Bardanikas, G., Jana, S., Meirhaeghe, N., Barthélemy, F., Riehle, A., Grün, S., Brovelli, A., & Brochier, T. (2026). *Reciprocal Fronto-Parietal Interactions Support Motor Anticipation during Sequential Reaching*. bioRxiv. https://doi.org/10.64898/2026.03.03.709252
+Bardanikas, G., Jana, S., Meirhaeghe, N., Barthélemy, F., Riehle, A., Grün, S., Brovelli, A., & Brochier, T. (2026). *Reciprocal Fronto-Parietal Interactions Support Distinct Motor Strategies during Sequential Reaching*. bioRxiv. https://doi.org/10.64898/2026.03.03.709252
 
 # System Requirements
 
@@ -61,13 +61,14 @@ python setup.py install
 ```
 vision4action/
 ├── analysis_scripts    # Core analysis pipeline
-   ├── CCA
-   ├── FIT
-   ├── LDA
-   ├── mua_plots
-   ├── preprocessing
-   ├── units_analysis
-   ├── behavioral_analysis
+   ├── CCA/
+   ├── FIT/
+   ├── LDA/
+   ├── mua_plots/
+   ├── preprocessing/
+   ├── units_analysis/
+   ├── behavioral_analysis/
+├── README.md
 ├── requirements.txt     # Python dependencies
 ├── setup.py             # Package installation script
 └── submit.sh            # Template script for submitting batch analysis jobs to a compute cluster
